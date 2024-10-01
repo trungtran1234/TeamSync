@@ -11,3 +11,10 @@
 - **No Manual Note-taking**: Eliminates the need for manual note-taking or task syncing after meetings.
 
 Stay productive with TeamSync — your AI-powered meeting assistant!
+
+## 👥 Creators
+
+- **Hasnain Mucklai**
+- **Trung Tran**
+- **Phuc Nguyen**
+- **Ahmet Mutlugun**
