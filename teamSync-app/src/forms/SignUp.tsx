@@ -3,7 +3,6 @@ import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import BackgroundLayout from '../components/layout/BackgroundLayout';
 import zoomIcon from '../assets/zoom-icon.png';
 
-
 interface FormData {
   firstName: string;
   lastName: string;

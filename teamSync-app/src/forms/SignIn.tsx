@@ -1,7 +1,7 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import BackgroundLayout from '../components/layout/BackgroundLayout';
-
+import zoomIcon from '../assets/zoom-icon.png';
 
 interface FormData {
   email: string;
@@ -127,7 +127,7 @@ const SignIn: React.FC = () => {
               onClick={() => (window.location.href = 'https://new-subdomain.ngrok-free.app/auth')} 
             >
               {/* Zoom Logo or Icon */}
-              <img src="/zoom-logo.png" alt="Zoom" className="w-6 h-6 mr-2" />
+              <img src={zoomIcon} alt="Zoom" className="w-6 h-6 mr-2" />
               Sign in with Zoom
             </button>
           </div>
