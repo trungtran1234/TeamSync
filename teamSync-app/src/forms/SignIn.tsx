@@ -124,7 +124,7 @@ const SignIn: React.FC = () => {
             <button
               type="button"
               className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              onClick={() => (window.location.href = 'https://new-subdomain.ngrok-free.app/auth')} // Replace with actual link
+              onClick={() => (window.location.href = 'https://new-subdomain.ngrok-free.app/auth')} 
             >
               {/* Zoom Logo or Icon */}
               <img src="/zoom-logo.png" alt="Zoom" className="w-6 h-6 mr-2" />
