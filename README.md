@@ -17,4 +17,4 @@ Stay productive with TeamSync — your AI-powered meeting assistant!
 - **Hasnain Mucklai -**  [LinkedIn](https://www.linkedin.com/in/hasnainmucklai) | [GitHub](https://github.com/Hasnain7861)
 - **Trung Tran -**  [LinkedIn](https://www.linkedin.com/in/trung-tran1234) | [GitHub](https://github.com/trungtran1234)
 - **Phuc Nguyen -**  [LinkedIn](https://www.linkedin.com/in/phuc-ngoc-tan-nguyen) | [GitHub](https://github.com/food0903)
-- **Ahmet Mutlugun -**  [LinkedIn](https://www.linkedin.com/in/ahmet-mutlugun) | [GitHub](https://github.com/othercreator)
+- **Ahmet Mutlugun -**  [LinkedIn](https://www.linkedin.com/in/ahmet-mutlugun) | [GitHub](https://github.com/ahmetmutlugun)
