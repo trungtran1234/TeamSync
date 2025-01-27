@@ -1,4 +1,5 @@
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';  // React Router for redirect
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import BackgroundLayout from '../components/layout/BackgroundLayout';
 import zoomIcon from '../assets/zoom-icon.png';
@@ -17,7 +18,18 @@ const SignIn: React.FC = () => {
     rememberMe: false,
   });
 
- 
+  const navigate = useNavigate();
+
+  // 1) Check if Zoom OAuth was successful (e.g., "?zoom_success=1")
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('zoom_success') === '1') {
+      // If Zoom auth succeeded on the server side and we got redirected to dashboard
+      navigate('/dashboard');
+    }
+  }, [navigate]);
+
+  // 2) Handle changes in input fields
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -26,18 +38,30 @@ const SignIn: React.FC = () => {
     }));
   };
 
- 
+  // 3) Handle the manual sign-in form submission (non-Zoom flow)
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    // sign in logic here
     console.log('Sign in:', formData);
+    // If credentials are valid, redirect:
+    navigate('/dashboard');
+  };
+
+  // 4) Handle Zoom sign-in flow
+  const handleZoomSignIn = () => {
+    // This URL will start the Zoom OAuth flow. Make sure the redirect_uri on your server side
+    // eventually redirects back to e.g., "http://localhost:5173/signin?zoom_success=1"
+    window.location.href =
+      'https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://bullfrog-ample-routinely.ngrok-free.app/oauth/callback';
   };
 
   return (
     <BackgroundLayout>
       <div className="space-y-6">
-        <h2 className="text-2xl font-semibold text-gray-800 text-center">Welcome Back</h2>
+        <h2 className="text-2xl font-semibold text-gray-800 text-center">
+          Welcome Back
+        </h2>
 
+        {/* Sign In Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Email Field */}
           <div className="space-y-2">
@@ -96,7 +120,10 @@ const SignIn: React.FC = () => {
               />
               <span className="ml-2 text-sm text-gray-600">Remember me</span>
             </label>
-            <a href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-800">
+            <a
+              href="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
               Forgot password?
             </a>
           </div>
@@ -115,7 +142,9 @@ const SignIn: React.FC = () => {
               <div className="w-full border-t border-gray-300"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              <span className="px-2 bg-white text-gray-500">
+                Or continue with
+              </span>
             </div>
           </div>
 
@@ -124,7 +153,7 @@ const SignIn: React.FC = () => {
             <button
               type="button"
               className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              onClick={() => (window.location.href = 'https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://bullfrog-ample-routinely.ngrok-free.app/oauth/callback')} 
+              onClick={handleZoomSignIn}
             >
               {/* Zoom Logo or Icon */}
               <img src={zoomIcon} alt="Zoom" className="w-6 h-6 mr-2" />
@@ -135,8 +164,11 @@ const SignIn: React.FC = () => {
 
         {/* Sign Up Link */}
         <p className="text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <a href="/signup" className="text-blue-600 hover:text-blue-800 font-medium">
+          Don&apos;t have an account?{' '}
+          <a
+            href="/signup"
+            className="text-blue-600 hover:text-blue-800 font-medium"
+          >
             Sign up
           </a>
         </p>
