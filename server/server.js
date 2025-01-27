@@ -95,6 +95,7 @@ const refreshAccessToken = async (refreshToken) => {
         throw new Error('Failed to refresh access token');
     }
 };
+
 app.get('/meetings', async (req, res) => {
     const userEmail = req.query.email; 
 
@@ -154,6 +155,134 @@ app.get('/meetings', async (req, res) => {
         res.status(500).send({ error: 'Failed to fetch meeting instances' });
     }
 });
+
+app.get('/meeting/:id/summary', async (req, res) => {
+    const meetingId = req.params.id;
+    const userEmail = req.query.email;
+
+    if (!meetingId || !userEmail) {
+        return res.status(400).send({ error: 'Meeting ID and user email are required' });
+    }
+
+    try {
+        // Retrieve user information from your database
+        const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [userEmail]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).send({ error: 'User not found' });
+        }
+        const userId = userResult.rows[0].id;
+
+        // Retrieve the latest access and refresh tokens
+        const tokenResult = await pool.query('SELECT access_token, refresh_token FROM tokens WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [userId]);
+        if (tokenResult.rows.length === 0) {
+            return res.status(401).send({ error: 'Access token is missing or expired' });
+        }
+        let { access_token: accessToken, refresh_token: refreshToken } = tokenResult.rows[0];
+
+        try {
+            // Fetch meeting summary
+            console.log('im in ')
+            const response = await axios.get(`https://api.zoom.us/v2/meetings/${meetingId}/meeting_summary`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            console.log('response!!! ', response.data);
+            res.send(response.data);
+        } catch (error) {
+            if (error.response && error.response.status === 401) {
+                // Refresh expired token
+                const newTokens = await refreshAccessToken(refreshToken);
+                accessToken = newTokens.access_token;
+                refreshToken = newTokens.refresh_token;
+
+                // Save the new tokens to the database
+                await pool.query(
+                    'INSERT INTO tokens (user_id, access_token, refresh_token) VALUES ($1, $2, $3)',
+                    [userId, accessToken, refreshToken]
+                );
+
+                // Retry fetching meeting summary with the new access token
+                const response = await axios.get(`https://api.zoom.us/v2/meetings/${meetingId}/meeting_summary`, {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                });
+                res.send(response.data);
+            } else {
+                throw error;
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching meeting summary:', error.response || error.message);
+        res.status(500).send({ error: 'Failed to fetch meeting summary' });
+    }
+});
+
+
+
+app.get('/meeting/:id/recordings', async (req, res) => {
+    const meetingId = req.params.id;
+    const userEmail = req.query.email;
+
+    if (!meetingId || !userEmail) {
+        return res.status(400).send({ error: 'Meeting ID and user email are required' });
+    }
+
+    try {
+        // Retrieve user information from your database
+        const userResult = await pool.query('SELECT id, zoomid FROM users WHERE email = $1', [userEmail]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).send({ error: 'User not found' });
+        }
+        const userId = userResult.rows[0].id;
+
+        // Retrieve the latest access and refresh tokens
+        const tokenResult = await pool.query('SELECT access_token, refresh_token FROM tokens WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [userId]);
+        if (tokenResult.rows.length === 0) {
+            return res.status(401).send({ error: 'Access token is missing or expired' });
+        }
+        let { access_token: accessToken, refresh_token: refreshToken } = tokenResult.rows[0];
+
+        try {
+            // Fetch meeting recordings
+            const response = await axios.get(`https://api.zoom.us/v2/meetings/${meetingId}/recordings`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            res.send(response.data);
+        } catch (error) {
+            if (error.response && error.response.status === 401) {
+                // Refresh expired token
+                const newTokens = await refreshAccessToken(refreshToken);
+                accessToken = newTokens.access_token;
+                refreshToken = newTokens.refresh_token;
+
+                // Save the new tokens to the database
+                await pool.query(
+                    'INSERT INTO tokens (user_id, access_token, refresh_token) VALUES ($1, $2, $3)',
+                    [userId, accessToken, refreshToken]
+                );
+
+                // Retry fetching meeting recordings with the new access token
+                const response = await axios.get(`https://api.zoom.us/v2/meetings/${meetingId}/recordings`, {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                });
+                res.send(response.data);
+            } else {
+                throw error;
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching meeting recordings:', error.response || error.message);
+        res.status(500).send({ error: 'Failed to fetch meeting recordings' });
+    }
+});
+
+
 
 app.listen(PORT, async() => {
     console.log(`Server is running on port ${PORT}`);
