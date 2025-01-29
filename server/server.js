@@ -127,7 +127,7 @@ app.get("/meeting/:id/recordings", async (req, res) => {
 
 app.get("/meeting/:id/participants", async (req, res) => {
   try {
-    const url = `https://api.zoom.us/v2/report/meetings/${req.params.id}/participants`;
+    const url = `https://api.zoom.us/v2/past_meetings/${req.params.id}/participants`;
     const data = await makeZoomRequest(url, req.query.email);
     res.send(data);
   } catch (error) {
