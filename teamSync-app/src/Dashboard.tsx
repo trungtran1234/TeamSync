@@ -1,8 +1,6 @@
-// Dashboard.tsx
-
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, Calendar, Clock, ChevronDown, Activity, Archive, BarChart 
+  Search, Calendar, Clock, ChevronDown, Activity, Archive, BarChart, Flag 
 } from 'lucide-react';
 
 interface ZoomMeeting {
@@ -20,6 +18,7 @@ const Dashboard = () => {
   const [meetings, setMeetings] = useState<ZoomMeeting[]>([]);
   const [participantsCounts, setParticipantsCounts] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState('recent');
+  const [flaggedMeetings, setFlaggedMeetings] = useState<Set<number>>(new Set());
 
   const userEmail = 'teamsync.group@gmail.com';
 
@@ -75,6 +74,33 @@ const Dashboard = () => {
       }
     });
   }, [meetings, userEmail]);
+
+  // Toggle flagged state for a meeting
+  const toggleFlag = (meetingId: number) => {
+    setFlaggedMeetings((prev) => {
+      const newFlaggedMeetings = new Set(prev);
+      if (newFlaggedMeetings.has(meetingId)) {
+        newFlaggedMeetings.delete(meetingId);
+      } else {
+        newFlaggedMeetings.add(meetingId);
+      }
+      return newFlaggedMeetings;
+    });
+  };
+
+  // Filter meetings based on the active tab
+  const filteredMeetings = meetings.filter((meeting) => {
+    const meetingDate = new Date(meeting.start_time);
+    const currentDate = new Date();
+    const sevenDaysAgo = new Date(currentDate.setDate(currentDate.getDate() - 7));
+
+    if (activeTab === 'recent') {
+      return meetingDate >= sevenDaysAgo;
+    } else if (activeTab === 'flagged') {
+      return flaggedMeetings.has(meeting.id);
+    }
+    return true; // For 'all' and other tabs
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -139,7 +165,7 @@ const Dashboard = () => {
 
         {/* Meeting Tabs */}
         <div className="flex space-x-6 mb-8 border-b border-gray-200">
-          {['recent', 'highlights', 'flagged', 'all'].map((tab) => (
+          {['recent', 'flagged', 'all'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -156,16 +182,17 @@ const Dashboard = () => {
 
         {/* Meetings Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {meetings.length === 0 && (
-            <p className="text-gray-500">No previous meetings found.</p>
+          {filteredMeetings.length === 0 && (
+            <p className="text-gray-500">No meetings found.</p>
           )}
-          {meetings.map((m) => {
+          {filteredMeetings.map((m) => {
             const participantCount = participantsCounts[m.id] ?? null;
+            const isFlagged = flaggedMeetings.has(m.id);
 
             return (
               <div 
                 key={m.id} 
-                className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow relative"
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -190,9 +217,8 @@ const Dashboard = () => {
                 
                 <div className="text-sm text-gray-600">
                   <p>Meeting ID: {m.id}</p>
-                  <p>Type: {m.type}</p>
 
-                  {/* Display # of participants right below "Type" */}
+                  {/* Display # of participants */}
                   <p>Participants: 
                     {participantCount === null 
                       ? ' Loading...' 
@@ -205,12 +231,22 @@ const Dashboard = () => {
                       href={m.join_url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
+                      className="inline-block px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      Join URL
+                      View Details
                     </a>
                   </p>
                 </div>
+
+                {/* Flag Icon */}
+                <button
+                  onClick={() => toggleFlag(m.id)}
+                  className="absolute bottom-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <Flag 
+                    className={`h-5 w-5 ${isFlagged ? 'text-blue-600' : 'text-gray-400'}`}
+                  />
+                </button>
               </div>
             );
           })}
