@@ -146,6 +146,53 @@ app.get("/recordings", async (req, res) => {
   }
 });
 
+app.post("/flagged-meetings", async (req, res) => {
+  const { user_id, meeting_id } = req.body;
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO flagged_meetings (user_id, meeting_id) VALUES ($1, $2) RETURNING *",
+      [user_id, meeting_id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("Error saving flagged meeting:", error);
+    res.status(500).json({ error: "Failed to save flagged meeting" });
+  }
+});
+
+app.delete("/flagged-meetings", async (req, res) => {
+  const { user_id, meeting_id } = req.body;
+
+  try {
+    await pool.query(
+      "DELETE FROM flagged_meetings WHERE user_id = $1 AND meeting_id = $2",
+      [user_id, meeting_id]
+    );
+    res.status(200).json({ message: "Flagged meeting removed" });
+  } catch (error) {
+    console.error("Error removing flagged meeting:", error);
+    res.status(500).json({ error: "Failed to remove flagged meeting" });
+  }
+});
+
+app.get("/flagged-meetings", async (req, res) => {
+  const { user_id } = req.query;
+
+  try {
+    const result = await pool.query(
+      "SELECT meeting_id FROM flagged_meetings WHERE user_id = $1",
+      [user_id]
+    );
+    const flaggedMeetings = result.rows.map((row) => row.meeting_id);
+    res.status(200).json(flaggedMeetings);
+  } catch (error) {
+    console.error("Error fetching flagged meetings:", error);
+    res.status(500).json({ error: "Failed to fetch flagged meetings" });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
