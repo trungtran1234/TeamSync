@@ -252,6 +252,30 @@ app.post("/meeting/:id/transcript", async (req, res) => {
   }
 });
 
+app.get("/meeting/:id/transcript", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+
+    // file key
+    const s3Key = `transcripts/meeting-${meetingId}.vtt`;
+
+    // command to get file w key
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+
+    // get file
+    const data = await s3Client.send(command);
+
+    res.setHeader("Content-Type", "text/vtt");
+    data.Body.pipe(res);
+  } catch (error) {
+    console.error("Error retrieving transcript:", error);
+    res.status(500).json({ error: "Failed to retrieve transcript" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
