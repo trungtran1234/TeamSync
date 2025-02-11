@@ -104,6 +104,7 @@ app.get("/oauth/callback", async (req, res) => {
   }
 });
 
+// GET list of meetings
 app.get("/meetings", async (req, res) => {
   try {
     const userData = await getUserAndTokens(req.query.email);
@@ -115,6 +116,7 @@ app.get("/meetings", async (req, res) => {
   }
 });
 
+// GET meeting summary
 app.get("/meeting/:id/summary", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/meetings/${req.params.id}/meeting_summary`;
@@ -125,6 +127,7 @@ app.get("/meeting/:id/summary", async (req, res) => {
   }
 });
 
+// GET meeting recording files
 app.get("/meeting/:id/recordings", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/meetings/${req.params.id}/recordings`;
@@ -135,6 +138,7 @@ app.get("/meeting/:id/recordings", async (req, res) => {
   }
 });
 
+// GET meeting participants
 app.get("/meeting/:id/participants", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/past_meetings/${req.params.id}/participants`;
@@ -252,6 +256,7 @@ app.post("/meeting/:id/transcript", async (req, res) => {
   }
 });
 
+// GET transcript from S3
 app.get("/meeting/:id/transcript", async (req, res) => {
   try {
     const meetingId = req.params.id;
@@ -270,6 +275,7 @@ app.get("/meeting/:id/transcript", async (req, res) => {
 
     res.setHeader("Content-Type", "text/vtt");
     data.Body.pipe(res);
+
   } catch (error) {
     console.error("Error retrieving transcript:", error);
     res.status(500).json({ error: "Failed to retrieve transcript" });
