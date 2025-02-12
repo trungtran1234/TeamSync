@@ -282,6 +282,56 @@ app.get("/meeting/:id/transcript", async (req, res) => {
   }
 });
 
+// POST recording from zoom to S3
+app.post("/meeting/:id/recording", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const userEmail = req.query.email;
+
+    if (!userEmail) {
+      return res.status(400).json({ error: "Missing user email." });
+    }
+
+    const recordingsUrl = `https://api.zoom.us/v2/meetings/${meetingId}/recordings`;
+    const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
+
+    const mp4File = recordingsData.recording_files?.find(
+      (f) => f.file_type === "MP4" // or other file types
+    );
+
+    if (!mp4File) {
+      return res.status(404).json({ error: "No MP4 recording file found for this meeting." });
+    }
+
+    const { access_token } = await getUserAndTokens(userEmail);
+    const recordingDownloadUrl = `${mp4File.download_url}?access_token=${access_token}`;
+
+    const recordingResponse = await axios.get(recordingDownloadUrl, {
+      responseType: "arraybuffer", // we want binary data
+    });
+    const recordingContents = recordingResponse.data;
+
+    const key = `recordings/meeting-${meetingId}.mp4`;
+
+    const command = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key,
+      Body: recordingContents,
+      ContentType: "video/mp4",
+    });
+
+    await s3Client.send(command);
+
+    return res.json({
+      message: "Recording uploaded to S3",
+    });
+  } catch (error) {
+    console.error("Error uploading recording:", error);
+    res.status(500).json({ error: "Failed to upload recording." });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
