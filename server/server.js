@@ -296,7 +296,7 @@ app.post("/meeting/:id/recording", async (req, res) => {
     const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
 
     const mp4File = recordingsData.recording_files?.find(
-      (f) => f.file_type === "MP4" // or other file types
+      (f) => f.file_type === "MP4"
     );
 
     if (!mp4File) {
@@ -307,7 +307,7 @@ app.post("/meeting/:id/recording", async (req, res) => {
     const recordingDownloadUrl = `${mp4File.download_url}?access_token=${access_token}`;
 
     const recordingResponse = await axios.get(recordingDownloadUrl, {
-      responseType: "arraybuffer", // we want binary data
+      responseType: "arraybuffer",
     });
     const recordingContents = recordingResponse.data;
 
@@ -331,6 +331,23 @@ app.post("/meeting/:id/recording", async (req, res) => {
   }
 });
 
+app.get("/meeting/:id/recording", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const s3Key = `recordings/meeting-${meetingId}.mp4`;
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+
+    const data = await s3Client.send(command);
+    res.setHeader("Content-Type", "video/mp4");
+    data.Body.pipe(res);
+  } catch (error) {
+    console.error("Error retrieving recording:", error);
+    res.status(500).json({ error: "Failed to retrieve recording." });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
