@@ -4,6 +4,7 @@ import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
 import pool from "./db.js";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import {
   getUserAndTokens,
   refreshAccessToken,
@@ -16,6 +17,15 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 const PORT = 8080;
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
 
 app.get("/", (req, res) => {
   res.send({ message: "Welcome to the Express server!" });
@@ -94,6 +104,7 @@ app.get("/oauth/callback", async (req, res) => {
   }
 });
 
+// GET list of meetings
 app.get("/meetings", async (req, res) => {
   try {
     const userData = await getUserAndTokens(req.query.email);
@@ -105,6 +116,7 @@ app.get("/meetings", async (req, res) => {
   }
 });
 
+// GET meeting summary
 app.get("/meeting/:id/summary", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/meetings/${req.params.id}/meeting_summary`;
@@ -115,6 +127,7 @@ app.get("/meeting/:id/summary", async (req, res) => {
   }
 });
 
+// GET meeting recording files
 app.get("/meeting/:id/recordings", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/meetings/${req.params.id}/recordings`;
@@ -125,6 +138,7 @@ app.get("/meeting/:id/recordings", async (req, res) => {
   }
 });
 
+// GET meeting participants
 app.get("/meeting/:id/participants", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/past_meetings/${req.params.id}/participants`;
@@ -192,6 +206,81 @@ app.get("/flagged-meetings", async (req, res) => {
   }
 });
 
+// POST transcript from zoom to S3
+app.post("/meeting/:id/transcript", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const userEmail = req.query.email; // e.g. ?email=user@example.com
+    if (!userEmail) {
+      return res.status(400).json({ error: "Missing user email." });
+    }
+
+    //fetch reocording files
+    const recordingsUrl = `https://api.zoom.us/v2/meetings/${meetingId}/recordings`;
+    const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
+    
+    //get transcript file
+    const transcriptFile = recordingsData.recording_files?.find(
+      (f) => f.file_type === "TRANSCRIPT" || f.recording_type === "audio_transcript"
+    );
+
+    if (!transcriptFile) {
+      return res.status(404).json({ error: "transcript file not found for this meeting." });
+    }
+
+    // make download url w access token
+    const { access_token } = await getUserAndTokens(userEmail);
+    const transcriptDownloadUrl = `${transcriptFile.download_url}?access_token=${access_token}`;
+
+    // downlaod file and put it on S3
+    const transcriptResponse = await axios.get(transcriptDownloadUrl, {
+      responseType: "arraybuffer",
+    });
+    const transcriptContents = transcriptResponse.data;
+    const key = `transcripts/meeting-${meetingId}.vtt`;
+    const putObjectCommand = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key,
+      Body: transcriptContents,
+      ContentType: "text/vtt",
+    });
+
+    await s3Client.send(putObjectCommand);
+
+    return res.json({
+      message: "transcript uploaded to S3 successfully",
+    });
+  } catch (error) {
+    console.error("Error fetching/uploading transcript:", error);
+    res.status(500).json({ error: "Failed to retrieve transcript." });
+  }
+});
+
+// GET transcript from S3
+app.get("/meeting/:id/transcript", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+
+    // file key
+    const s3Key = `transcripts/meeting-${meetingId}.vtt`;
+
+    // command to get file w key
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+
+    // get file
+    const data = await s3Client.send(command);
+
+    res.setHeader("Content-Type", "text/vtt");
+    data.Body.pipe(res);
+
+  } catch (error) {
+    console.error("Error retrieving transcript:", error);
+    res.status(500).json({ error: "Failed to retrieve transcript" });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

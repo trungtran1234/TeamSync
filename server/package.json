@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.744.0",
     "@zoom/appssdk": "^0.16.24",
     "axios": "^1.7.9",
     "body-parser": "^1.20.3",
