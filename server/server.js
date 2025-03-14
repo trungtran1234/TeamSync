@@ -298,15 +298,18 @@ app.post("/summarize", async (req, res) => {
     }
 
     const prompt = `You are an AI-powered meeting assistant. Your job is to analyze the following meeting transcript and generate a professional, structured summary. Ensure the summary includes:
-    - Key discussion points
-    - Action items (if any)
-    - Decisions made
-    - Each point made by participants
+    - **Key discussion points**
+    - **Action items** (if any)
+    - **Decisions made**
+    - **Each point made by participants**
+
+    Don't include "Meeting Summary:" at the beginning.
 
     **Meeting Transcript:**
     "${transcriptText}"
 
-    Provide a clear and concise summary with bullet points.`;
+    Provide a clear and concise summary using markdown formatting with bullet points for lists and bold text for section headings.
+    `;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4",
@@ -322,6 +325,75 @@ app.post("/summarize", async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 });
+
+// Store summary in S3
+app.post("/meeting/:id/summary-text", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const { summary } = req.body;
+    
+    if (!summary) {
+      return res.status(400).json({ error: "Summary text is required" });
+    }
+    
+    const key = `summaries/meeting-${meetingId}.json`;
+    const putObjectCommand = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: key,
+      Body: JSON.stringify({ summary, timestamp: new Date().toISOString() }),
+      ContentType: "application/json",
+    });
+    
+    await s3Client.send(putObjectCommand);
+    
+    return res.json({
+      message: "Summary stored successfully"
+    });
+  } catch (error) {
+    console.error("Error storing summary:", error);
+    res.status(500).json({ error: "Failed to store summary" });
+  }
+});
+
+// Get summary from S3
+app.get("/meeting/:id/summary-text", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const s3Key = `summaries/meeting-${meetingId}.json`;
+    
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: s3Key,
+    });
+    
+    try {
+      const data = await s3Client.send(command);
+      const summaryData = await streamToString(data.Body);
+      res.json(JSON.parse(summaryData));
+    } catch (s3Error) {
+      // If summary doesn't exist, generate it
+      if (s3Error.$metadata && s3Error.$metadata.httpStatusCode === 404) {
+        // This means the summary needs to be generated
+        res.status(404).json({ error: "Summary not found", needsGeneration: true });
+      } else {
+        throw s3Error;
+      }
+    }
+  } catch (error) {
+    console.error("Error retrieving summary:", error);
+    res.status(500).json({ error: "Failed to retrieve summary" });
+  }
+});
+
+// Helper function to convert stream to string
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
 
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {
