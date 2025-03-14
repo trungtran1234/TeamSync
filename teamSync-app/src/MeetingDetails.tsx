@@ -72,12 +72,8 @@ const MeetingDetails = () => {
 
       <h1 className="text-3xl font-bold mb-4">Meeting Details for {id}</h1>
 
-      {/* ✅ Two-column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-        {/* First Column: Video + Download Button (Fixed Together) */}
         <div className="flex flex-col items-center">
-          {/* Video at the top */}
           <video
             src={`http://localhost:8080/meeting/${id}/recording`}
             controls
@@ -86,7 +82,6 @@ const MeetingDetails = () => {
             Your browser does not support the video tag.
           </video>
 
-          {/* ✅ Download button is fixed right under the video */}
           <button
             onClick={downloadTranscript}
             className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg shadow-lg w-full"
@@ -95,7 +90,6 @@ const MeetingDetails = () => {
           </button>
         </div>
 
-        {/* Second Column: Meeting Summary (Can Expand) */}
         <div className="bg-slate-800 p-4 rounded-lg h-full overflow-auto min-h-[300px]">
           <h2 className="text-2xl font-semibold mb-2">Meeting Summary</h2>
           <ReactMarkdown>{summary || "Loading summary..."}</ReactMarkdown>
