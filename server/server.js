@@ -4,6 +4,7 @@ import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
 import pool from "./db.js";
+import { OpenAI } from 'openai';
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import {
   getUserAndTokens,
@@ -24,6 +25,10 @@ const s3Client = new S3Client({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
+});
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 
@@ -279,6 +284,42 @@ app.get("/meeting/:id/transcript", async (req, res) => {
   } catch (error) {
     console.error("Error retrieving transcript:", error);
     res.status(500).json({ error: "Failed to retrieve transcript" });
+  }
+});
+
+
+// Endpoint to summarize a transcript
+app.post("/summarize", async (req, res) => {
+  try {
+    const { transcriptText } = req.body;
+
+    if (!transcriptText) {
+      return res.status(400).json({ error: "Transcript is required" });
+    }
+
+    const prompt = `You are an AI-powered meeting assistant. Your job is to analyze the following meeting transcript and generate a professional, structured summary. Ensure the summary includes:
+    - Key discussion points
+    - Action items (if any)
+    - Decisions made
+    - Each point made by participants
+
+    **Meeting Transcript:**
+    "${transcriptText}"
+
+    Provide a clear and concise summary with bullet points.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "system", content: prompt }],
+      temperature: 0.7,
+    });
+
+    const summary = response.choices[0].message.content;
+
+    res.json({ summary });
+  } catch (error) {
+    console.error("Error generating summary:", error);
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
