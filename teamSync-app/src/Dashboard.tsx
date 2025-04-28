@@ -70,8 +70,13 @@ const Dashboard: React.FC = () => {
     })
   }
 
-  // Filter by tab
-  const tabFilteredMeetings = meetings.filter(m => {
+  // 1) Make a sorted copy of meetings (descending: most recent first)
+  const sortedMeetings = [...meetings].sort((a, b) =>
+    new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+  )
+
+  // 2) Filter by active tab
+  const tabFilteredMeetings = sortedMeetings.filter(m => {
     if (activeTab === "all") return true
     if (activeTab === "flagged") return flaggedMeetings.has(m.id)
     const started = new Date(m.start_time).getTime()
@@ -79,7 +84,7 @@ const Dashboard: React.FC = () => {
     return started >= cutoff
   })
 
-  // Then filter by search term
+  // 3) Then filter by search term (meeting title)
   const filteredMeetings = tabFilteredMeetings.filter(m =>
     m.topic.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -189,9 +194,9 @@ const Dashboard: React.FC = () => {
           />
         </div>
 
-        {/* Tabs */} 
+        {/* Tabs */}
         <div className="flex space-x-6 mb-8 border-b border-slate-700">
-          {["recent","flagged","all"].map(tab => (
+          {["recent","flagged","all"].map(tab => (  
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -204,7 +209,7 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
 
-        {/* Meetings Grid */} 
+        {/* Meetings Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredMeetings.length === 0 && <p className="text-slate-400">No meetings found.</p>}
           {filteredMeetings.map(m => {
