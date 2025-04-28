@@ -1,10 +1,31 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const { Pool } = require('pg');
 const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 // Initialize AWS services
-const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
 const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' });
+
+// Initialize database pool
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+// Initialize email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
 
 // Environment variables will be set in the Lambda configuration
 const BUCKET_NAME = process.env.S3_BUCKET_NAME;
@@ -135,7 +156,19 @@ async function generateSummary(meetingId, hostEmail) {
   try {
     console.log(`Generating summary for meeting ${meetingId}`);
     
-    // 1. Fetch the transcript
+    // 1. Get user email from database
+    const userQuery = await pool.query(
+      'SELECT email FROM users WHERE zoomid = $1',
+      [hostEmail]
+    );
+    
+    if (userQuery.rows.length === 0) {
+      throw new Error('User not found in database');
+    }
+    
+    const userEmail = userQuery.rows[0].email;
+    
+    // 2. Fetch the transcript
     const transcriptResponse = await axios.get(
       `${API_BASE_URL}/meeting/${meetingId}/transcript`,
       { timeout: 10000 }
@@ -147,7 +180,7 @@ async function generateSummary(meetingId, hostEmail) {
     
     const transcriptText = transcriptResponse.data;
     
-    // 2. Generate summary using OpenAI
+    // 3. Generate summary using OpenAI
     const summaryResponse = await axios.post(
       `${API_BASE_URL}/summarize`,
       { transcriptText },
@@ -163,7 +196,7 @@ async function generateSummary(meetingId, hostEmail) {
     
     const summary = summaryResponse.data.summary;
     
-    // 3. Store summary in S3
+    // 4. Store summary in S3
     await axios.post(
       `${API_BASE_URL}/meeting/${meetingId}/summary-text`,
       { summary },
@@ -173,7 +206,24 @@ async function generateSummary(meetingId, hostEmail) {
       }
     );
     
-    console.log(`Successfully generated and stored summary for meeting ${meetingId}`);
+    // 5. Send email with summary
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: userEmail,
+      subject: `Meeting Summary - ${new Date().toLocaleDateString()}`,
+      html: `
+        <h2>Meeting Summary</h2>
+        <p>Here's the summary of your meeting (ID: ${meetingId}):</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+          ${summary}
+        </div>
+        <p>Best regards,<br>TeamSync</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    
+    console.log(`Successfully generated, stored, and emailed summary for meeting ${meetingId}`);
     return true;
   } catch (error) {
     console.error(`Error generating summary for meeting ${meetingId}:`, error);
