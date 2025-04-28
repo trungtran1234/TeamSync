@@ -133,6 +133,7 @@ app.get("/meeting/:id/summary", async (req, res) => {
 });
 
 // GET meeting recordings status (used by Lambda functions)
+// GET meeting recordings status (used by Lambda functions)
 app.get("/meeting/:id/recordings", async (req, res) => {
   try {
     const meetingId = req.params.id;
@@ -324,6 +325,11 @@ app.post("/summarize", async (req, res) => {
     - **Decisions made** (as bullet points)
     - **Each point made by participants** (as bullet points)
     
+    - **Key discussion points** (as bullet points)
+    - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
+    - **Decisions made** (as bullet points)
+    - **Each point made by participants** (as bullet points)
+    
     Don't include "Meeting Summary:" at the beginning.
     
     **Meeting Transcript:**
@@ -416,16 +422,6 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve summary" });
   }
 });
-
-// Helper function to convert stream to string
-function streamToString(stream) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-  });
-}
 
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {
