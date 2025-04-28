@@ -1,9 +1,9 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import SignIn from './forms/SignIn';
 import SignUp from './forms/SignUp';
 import Dashboard from './Dashboard';  
 import MeetingDetails from "./MeetingDetails";
+import Settings from "./Settings";
 
 function App() {
   return (
@@ -14,10 +14,10 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/meeting/:id" element={<MeetingDetails />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Router>
   );
 }
 
 export default App;
-

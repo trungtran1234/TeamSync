@@ -12,6 +12,13 @@ import {
   refreshAccessToken,
   makeZoomRequest,
 } from "./zoomAPI.js";
+import {
+  getIntegrationStatus,
+  getIntegrationDetails,
+  connectToPlatform,
+  disconnectFromPlatform,
+  syncActionItems
+} from "./platformIntegrations.js";
 
 dotenv.config();
 
@@ -422,6 +429,13 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve summary" });
   }
 });
+
+// Platform integration endpoints
+app.get("/integrations/status", getIntegrationStatus);
+app.get("/integrations/:platform", getIntegrationDetails);
+app.post("/integrations/:platform", connectToPlatform);
+app.delete("/integrations/:platform", disconnectFromPlatform);
+app.post("/meeting/:id/sync-action-items", syncActionItems);
 
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {

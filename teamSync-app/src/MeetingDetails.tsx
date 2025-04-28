@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useParams, useNavigate } from "react-router-dom";
+import SyncActionItems from "./components/SyncActionItems";
 
 interface Participant {
   name?: string;
@@ -248,11 +249,19 @@ const MeetingDetails = () => {
           {loading ? (
             <p>Loading summary...</p>
           ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-            >
-              {summary || "No summary available"}
-            </ReactMarkdown>)}
+            <>
+              <SyncActionItems 
+                meetingId={id || ""} 
+                userEmail={userEmail} 
+                hasSummary={!!summary} 
+              />
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+              >
+                {summary || "No summary available"}
+              </ReactMarkdown>
+            </>
+          )}
         </div>
       </div>
     </div>
