@@ -28,13 +28,13 @@ const MeetingDetails = () => {
   const { id } = useParams<{ id: string }>();
   const [summary, setSummary] = useState("");
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [meetingDetails, setMeetingDetails] = useState<MeetingDetails | null>(null);
+  const [meetingDetails] = useState<MeetingDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
   // make endpoint to fetch email and use it later
-  const userEmail = 'teamsync.group@gmail.com'
+  const userEmail = "teamsync.group@gmail.com";
 
   useEffect(() => {
     if (!id || !userEmail) {
@@ -47,9 +47,10 @@ const MeetingDetails = () => {
       setLoading(true);
       try {
         // Fetch meeting details and participants in parallel
-        const [participantsResponse, meetingSummaryResponse] = await Promise.all([
-          fetch(`http://localhost:8080/meeting/${id}/participants?email=${userEmail}`),
-          fetch(`http://localhost:8080/meeting/${id}/summary?email=${userEmail}`)
+        const [participantsResponse] = await Promise.all([
+          fetch(
+            `http://localhost:8080/meeting/${id}/participants?email=${userEmail}`,
+          ),
         ]);
 
         if (participantsResponse.ok) {
@@ -57,13 +58,10 @@ const MeetingDetails = () => {
           setParticipants(participantsData.participants || []);
         }
 
-        if (meetingSummaryResponse.ok) {
-          const meetingData = await meetingSummaryResponse.json();
-          setMeetingDetails(meetingData);
-        }
-
         // Try to fetch the stored summary
-        const storedSummaryResponse = await fetch(`http://localhost:8080/meeting/${id}/summary-text`);
+        const storedSummaryResponse = await fetch(
+          `http://localhost:8080/meeting/${id}/summary-text`,
+        );
 
         if (storedSummaryResponse.ok) {
           // If the summary exists, use it
@@ -84,12 +82,17 @@ const MeetingDetails = () => {
     const generateAndStoreSummary = async () => {
       try {
         // Make sure transcript is available
-        await fetch(`http://localhost:8080/meeting/${id}/transcript?email=${userEmail}`, {
-          method: "POST"
-        });
+        await fetch(
+          `http://localhost:8080/meeting/${id}/transcript?email=${userEmail}`,
+          {
+            method: "POST",
+          },
+        );
 
         // Fetch transcript
-        const transcriptResponse = await fetch(`http://localhost:8080/meeting/${id}/transcript`);
+        const transcriptResponse = await fetch(
+          `http://localhost:8080/meeting/${id}/transcript`,
+        );
 
         if (!transcriptResponse.ok) {
           throw new Error("Failed to fetch transcript");
@@ -128,7 +131,9 @@ const MeetingDetails = () => {
 
   const downloadTranscript = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/meeting/${id}/transcript`);
+      const response = await fetch(
+        `http://localhost:8080/meeting/${id}/transcript`,
+      );
       if (!response.ok) throw new Error("Failed to fetch transcript");
 
       const blob = await response.blob();
@@ -207,26 +212,45 @@ const MeetingDetails = () => {
               <>
                 {meetingDetails && (
                   <div className="mb-4">
-                    <p className="text-lg"><span className="font-semibold">Topic:</span> {meetingDetails.topic || "Untitled"}</p>
-                    <p><span className="font-semibold">Start Time:</span> {formatDate(meetingDetails.start_time)}</p>
-                    <p><span className="font-semibold">Duration:</span> {meetingDetails.duration || "N/A"} minutes</p>
+                    <p className="text-lg">
+                      <span className="font-semibold">Topic:</span>{" "}
+                      {meetingDetails.topic || "Untitled"}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Start Time:</span>{" "}
+                      {formatDate(meetingDetails.start_time)}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Duration:</span>{" "}
+                      {meetingDetails.duration || "N/A"} minutes
+                    </p>
                     {meetingDetails.host_email && (
-                      <p><span className="font-semibold">Host:</span> {meetingDetails.host_email}</p>
+                      <p>
+                        <span className="font-semibold">Host:</span>{" "}
+                        {meetingDetails.host_email}
+                      </p>
                     )}
                   </div>
                 )}
 
                 <div>
-                  <h3 className="text-xl font-semibold mb-2">Participants ({participants.length})</h3>
+                  <h3 className="text-xl font-semibold mb-2">
+                    Participants ({participants.length})
+                  </h3>
                   {participants.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {participants.map((participant, index) => (
-                        <div key={index} className="bg-slate-700 p-2 rounded flex items-center">
+                        <div
+                          key={index}
+                          className="bg-slate-700 p-2 rounded flex items-center"
+                        >
                           <div className="h-8 w-8 bg-violet-600 rounded-full flex items-center justify-center mr-2">
                             {participant.name?.charAt(0).toUpperCase() || "?"}
                           </div>
                           <div>
-                            <p className="font-medium">{participant.name || "Anonymous"}</p>
+                            <p className="font-medium">
+                              {participant.name || "Anonymous"}
+                            </p>
                             <p className="text-xs text-gray-300">
                               {participant.user_email || "No email provided"}
                             </p>
@@ -248,11 +272,10 @@ const MeetingDetails = () => {
           {loading ? (
             <p>Loading summary...</p>
           ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-            >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {summary || "No summary available"}
-            </ReactMarkdown>)}
+            </ReactMarkdown>
+          )}
         </div>
       </div>
     </div>
