@@ -417,6 +417,16 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
   }
 });
 
+// Helper function to convert stream to string
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
+
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {
   try {
