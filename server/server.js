@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import pool from "./db.js";
 import { OpenAI } from 'openai';
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   getUserAndTokens,
   refreshAccessToken,
@@ -21,16 +22,15 @@ const PORT = 8080;
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+});
+
+const lambdaClient = new LambdaClient({
+  region: process.env.AWS_REGION || 'us-west-2',
 });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
 
 app.get("/", (req, res) => {
   res.send({ message: "Welcome to the Express server!" });
@@ -132,8 +132,30 @@ app.get("/meeting/:id/summary", async (req, res) => {
   }
 });
 
-// GET meeting recording files
+// GET meeting recordings status (used by Lambda functions)
 app.get("/meeting/:id/recordings", async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const userEmail = req.query.email;
+
+    if (!userEmail) {
+      return res.status(400).json({ error: "Missing user email." });
+    }
+
+    // Fetch recordings from Zoom
+    const recordingsUrl = `https://api.zoom.us/v2/meetings/${meetingId}/recordings`;
+    const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
+    
+    // Return the recordings data
+    return res.json(recordingsData);
+  } catch (error) {
+    console.error("Error fetching recordings data:", error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// GET meeting recording files
+app.get("/meeting/:id/recordings/files", async (req, res) => {
   try {
     const url = `https://api.zoom.us/v2/meetings/${req.params.id}/recordings`;
     const data = await makeZoomRequest(url, req.query.email);
@@ -287,7 +309,6 @@ app.get("/meeting/:id/transcript", async (req, res) => {
   }
 });
 
-
 // Endpoint to summarize a transcript
 app.post("/summarize", async (req, res) => {
   try {
@@ -298,17 +319,28 @@ app.post("/summarize", async (req, res) => {
     }
 
     const prompt = `You are an AI-powered meeting assistant. Your job is to analyze the following meeting transcript and generate a professional, structured summary. Ensure the summary includes:
-    - **Key discussion points**
-    - **Action items** (if any)
-    - **Decisions made**
-    - **Each point made by participants**
-
+    - **Key discussion points** (as bullet points)
+    - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
+    - **Decisions made** (as bullet points)
+    - **Each point made by participants** (as bullet points)
+    
     Don't include "Meeting Summary:" at the beginning.
-
+    
     **Meeting Transcript:**
     "${transcriptText}"
-
-    Provide a clear and concise summary using markdown formatting with bullet points for lists and bold text for section headings.
+    
+    Provide a clear and concise summary using markdown formatting. For the action items, please use the following format:
+    
+    **Action Items:**
+    1. **Task Title:** [Short Title]
+       **Description:** [Brief, actionable description]
+    
+    Example:
+    1. **UI Updates:** Update minor UI elements as discussed.
+    2. **Transcript Summarization:** Complete the transcript summarization.
+    3. **Dashboard Enhancements:** Display the participants list and action items on the dashboard.
+    
+    This format ensures that the action items are simple and clear enough to be converted directly into tickets in project management tools.
     `;
 
     const response = await openai.chat.completions.create({
@@ -461,6 +493,81 @@ app.get("/meeting/:id/recording", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve recording." });
   }
 });
+
+// Zoom webhook endpoint for meeting notifications
+app.post("/zoom-webhook", async (req, res) => {
+  try {
+    const event = req.body;
+    console.log("Received Zoom webhook event:", JSON.stringify(event));
+
+    // Always return 200 OK to Zoom quickly to acknowledge receipt
+    // This prevents Zoom from retrying the webhook
+    const responsePromise = res.status(200).json({ success: true });
+
+    // Process the webhook event asynchronously
+    try {
+      // Verify this is a meeting.ended or recording.completed event
+      if (event.event === "recording.completed") {
+        const meetingId = event.payload.object.id;
+        const hostEmail = event.payload.object.host_email;
+        
+        if (!meetingId || !hostEmail) {
+          console.error("Missing meeting ID or host email in webhook payload");
+          return;
+        }
+
+        // Invoke AWS Lambda function to process the meeting data
+        console.log(`Invoking Lambda function for meeting ${meetingId} hosted by ${hostEmail}`);
+        
+        // Make sure we're using the correct region
+        const lambdaRegion = process.env.AWS_REGION || 'us-west-1';
+        console.log(`Using Lambda region: ${lambdaRegion}`);
+        
+        // Create a Lambda client with the specific region
+        const lambdaClient = new LambdaClient({
+          region: lambdaRegion
+        });
+        
+        // Get the function name from environment variables
+        const functionName = process.env.MEETING_PROCESSOR_LAMBDA || 'teamSync-meeting-processor';
+        console.log(`Invoking Lambda function: ${functionName}`);
+        
+        const params = {
+          FunctionName: functionName,
+          InvocationType: 'Event', // Asynchronous invocation
+          Payload: JSON.stringify({
+            meetingId,
+            hostEmail,
+            eventType: event.event
+          })
+        };
+        
+        await lambdaClient.send(new InvokeCommand(params));
+        console.log(`Successfully invoked Lambda for meeting ${meetingId}`);
+      } else if (event.event === "meeting.ended") {
+        console.log("Meeting ended event received - waiting for recordings to be processed by Zoom");
+      }
+    } catch (error) {
+      console.error("Error processing webhook event:", error);
+    }
+
+    return responsePromise;
+  } catch (error) {
+    console.error("Error handling Zoom webhook:", error);
+    // Still return 200 to Zoom to acknowledge receipt
+    return res.status(200).json({ success: true });
+  }
+});
+
+// Helper function to convert stream to string
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
