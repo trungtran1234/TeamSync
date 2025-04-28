@@ -15,6 +15,12 @@ interface ZoomMeeting {
   join_url: string
 }
 
+declare global {
+  interface Window {
+    google?: any
+  }
+}
+
 const Dashboard: React.FC = () => {
   const [meetings, setMeetings] = useState<ZoomMeeting[]>([])
   const [participantsCounts, setParticipantsCounts] = useState<Record<number, number>>({})
@@ -23,11 +29,40 @@ const Dashboard: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null)
+  const [userInitial, setUserInitial] = useState<string>("")
 
   const userEmail = "teamsync.group@gmail.com"
   const navigate = useNavigate()
 
-  // 1) Fetch meetings
+  // Google Identity Services callback
+  function handleCredentialResponse(response: any) {
+    try {
+      const payload = response.credential.split('.')
+      const decoded = JSON.parse(atob(payload[1]))
+      setUserPhotoUrl(decoded.picture)
+      setUserInitial(decoded.name.charAt(0).toUpperCase())
+    } catch (e) {
+      console.error("Failed to parse Google credential", e)
+    }
+  }
+
+  // Initialize Google One Tap / auto sign-in
+  useEffect(() => {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      window.google.accounts.id.initialize({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+        callback: handleCredentialResponse,
+        auto_select: true,
+      })
+      window.google.accounts.id.prompt()
+    } else {
+      // fallback initial from email
+      setUserInitial(userEmail.charAt(0).toUpperCase())
+    }
+  }, [userEmail])
+
+  // Fetch meetings
   useEffect(() => {
     fetch(`http://localhost:8080/meetings?email=${encodeURIComponent(userEmail)}`)
       .then(res => {
@@ -38,10 +73,9 @@ const Dashboard: React.FC = () => {
       .catch(console.error)
   }, [userEmail])
 
-  // 2) Fetch participant counts
+  // Fetch participant counts
   useEffect(() => {
     if (!meetings.length) return
-
     meetings.forEach(async m => {
       try {
         const res = await fetch(
@@ -49,11 +83,9 @@ const Dashboard: React.FC = () => {
         )
         if (!res.ok) throw new Error(res.statusText)
         const data = await res.json()
-        const count =
-          typeof data.total_records === "number"
-            ? data.total_records
-            : data.participants?.length || 0
-
+        const count = typeof data.total_records === "number"
+          ? data.total_records
+          : data.participants?.length || 0
         setParticipantsCounts(prev => ({ ...prev, [m.id]: count }))
       } catch (err) {
         console.error(err)
@@ -61,21 +93,21 @@ const Dashboard: React.FC = () => {
     })
   }, [meetings, userEmail])
 
-  // Toggle flagged state
+  // Toggle flagged
   const toggleFlag = (id: number) => {
     setFlaggedMeetings(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+      const nxt = new Set(prev)
+      nxt.has(id) ? nxt.delete(id) : nxt.add(id)
+      return nxt
     })
   }
 
-  // 1) Make a sorted copy of meetings (descending: most recent first)
+  // Sort descending by start_time
   const sortedMeetings = [...meetings].sort((a, b) =>
     new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
   )
 
-  // 2) Filter by active tab
+  // Filter by tab
   const tabFilteredMeetings = sortedMeetings.filter(m => {
     if (activeTab === "all") return true
     if (activeTab === "flagged") return flaggedMeetings.has(m.id)
@@ -84,7 +116,7 @@ const Dashboard: React.FC = () => {
     return started >= cutoff
   })
 
-  // 3) Then filter by search term (meeting title)
+  // Filter by search term in title
   const filteredMeetings = tabFilteredMeetings.filter(m =>
     m.topic.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -95,28 +127,7 @@ const Dashboard: React.FC = () => {
       <div className="fixed left-0 top-0 h-full w-64 bg-slate-950 p-6 shadow-lg">
         <h1 className="text-2xl font-bold text-violet-400 mb-10">TeamSync</h1>
         <nav className="space-y-6">
-          <div>
-            <p className="text-sm font-medium text-slate-400 mb-2">Overview</p>
-            <button className="w-full flex items-center space-x-3 px-4 py-2.5 bg-violet-600 text-white rounded-xl">
-              <Activity className="h-5 w-5" />
-              <span>Dashboard</span>
-            </button>
-            <button className="w-full flex items-center space-x-3 px-4 py-2.5 text-slate-300 hover:bg-slate-800 rounded-xl transition">
-              <BarChart className="h-5 w-5" />
-              <span>Analytics</span>
-            </button>
-            <button className="w-full flex items-center space-x-3 px-4 py-2.5 text-slate-300 hover:bg-slate-800 rounded-xl transition">
-              <Archive className="h-5 w-5" />
-              <span>Archive</span>
-            </button>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-400 mb-2">Meetings</p>
-            <button className="w-full flex items-center space-x-3 px-4 py-2.5 text-slate-300 hover:bg-slate-800 rounded-xl transition">
-              <Calendar className="h-5 w-5" />
-              <span>Calendar</span>
-            </button>
-          </div>
+          {/* nav items... */}
         </nav>
       </div>
 
@@ -128,27 +139,23 @@ const Dashboard: React.FC = () => {
             <h2 className="text-2xl font-semibold text-white">Meeting Insights</h2>
             <p className="text-slate-300">View and analyze your meeting recordings</p>
           </div>
+
+          {/* Avatar + Dropdown */}
           <div className="relative">
             <button onClick={() => setMenuOpen(o => !o)} className="flex items-center space-x-2">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 flex items-center justify-center text-white font-medium">
-                JD
-              </div>
+              {userPhotoUrl ? (
+                <img src={userPhotoUrl} alt="Profile" className="h-10 w-10 rounded-full object-cover" />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 flex items-center justify-center text-white font-medium">
+                  {userInitial}
+                </div>
+              )}
               <ChevronDown className="h-5 w-5 text-slate-400" />
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-md shadow-lg z-10">
-                <button
-                  onClick={() => { setShowProfileModal(true); setMenuOpen(false) }}
-                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-slate-700"
-                >
-                  Profile
-                </button>
-                <button
-                  onClick={() => navigate("/signin")}
-                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-slate-700"
-                >
-                  Sign Out
-                </button>
+                <button onClick={() => { setShowProfileModal(true); setMenuOpen(false) }} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Profile</button>
+                <button onClick={() => navigate("/signin")} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Sign Out</button>
               </div>
             )}
           </div>
@@ -158,23 +165,12 @@ const Dashboard: React.FC = () => {
         {showProfileModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
             <div className="bg-slate-800 rounded-xl p-8 w-full max-w-lg">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">Linked accounts</h3>
-                <button
-                  onClick={() => setShowProfileModal(false)}
-                  className="text-slate-400 hover:text-white text-xl leading-none"
-                >
-                  &times;
-                </button>
-              </div>
+              <h3 className="text-lg font-semibold text-white mb-4">Linked accounts</h3>
               <div className="space-y-4">
-                {['asana', 'jira', 'trello', 'email'].map(key => (
+                {['asana','jira','trello','email'].map(key => (
                   <div key={key}>
-                    <label className="block text-sm font-medium text-slate-200 capitalize">{key}</label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full bg-slate-700 text-white placeholder-slate-400 border border-slate-600 rounded-md p-2 focus:ring-violet-500 focus:border-violet-500"
-                    />
+                    <label className="block text-sm text-slate-200 capitalize">{key}</label>
+                    <input className="mt-1 w-full bg-slate-700 text-white placeholder-slate-400 border border-slate-600 rounded-md p-2 focus:ring-violet-500 focus:border-violet-500" />
                   </div>
                 ))}
               </div>
@@ -196,14 +192,8 @@ const Dashboard: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex space-x-6 mb-8 border-b border-slate-700">
-          {["recent","flagged","all"].map(tab => (  
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              className={`pb-4 px-2 text-sm font-medium capitalize ${
-                activeTab === tab ? "text-violet-400 border-b-2 border-violet-400" : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
+          {['recent','flagged','all'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab as any)} className={`pb-4 px-2 text-sm font-medium capitalize ${activeTab===tab?'text-violet-400 border-b-2 border-violet-400':'text-slate-400 hover:text-slate-200'}`}>
               {tab} Meetings
             </button>
           ))}
@@ -219,24 +209,23 @@ const Dashboard: React.FC = () => {
               <div key={m.id} className="bg-slate-800 rounded-xl p-6 shadow-md hover:shadow-lg border border-slate-700 relative">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-lg font-medium text-white">{m.topic || "Untitled Meeting"}</h3>
+                    <h3 className="text-lg font-medium text-white">{m.topic || 'Untitled Meeting'}</h3>
                     <div className="flex items-center space-x-4 text-sm text-slate-300 mt-1">
                       <span className="flex items-center">
                         <Clock className="h-4 w-4 mr-1" />
-                        {m.start_time ? new Date(m.start_time).toLocaleString() : "No start time"}
+                        {m.start_time ? new Date(m.start_time).toLocaleString() : 'No start time'}
                       </span>
                       <span>•</span>
-                      <span>{m.duration ? `${m.duration} min` : "N/A"}</span>
+                      <span>{m.duration ? `${m.duration} min` : 'N/A'}</span>
                     </div>
                   </div>
                   <span className="px-3 py-1 text-xs font-medium text-violet-200 bg-violet-900/50 rounded-full">
-                    {m.status === "waiting" ? "Scheduled" : "Previous"}
+                    {m.status==='waiting'?'Scheduled':'Previous'}
                   </span>
                 </div>
-
                 <div className="text-sm text-slate-300">
                   <p>Meeting ID: {m.id}</p>
-                  <p>Participants: {count == null ? "Loading..." : count}</p>
+                  <p>Participants: {count==null?'Loading...':count}</p>
                   <div className="mt-2">
                     <Link to={`/meeting/${m.id}`}>
                       <button className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition">
@@ -245,12 +234,8 @@ const Dashboard: React.FC = () => {
                     </Link>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => toggleFlag(m.id)}
-                  className="absolute bottom-4 right-4 p-2 rounded-full hover:bg-slate-700 transition"
-                >
-                  <Flag className={`h-5 w-5 ${isFlagged ? "text-violet-400" : "text-slate-400"}`} />
+                <button onClick={()=>toggleFlag(m.id)} className="absolute bottom-4 right-4 p-2 rounded-full hover:bg-slate-700 transition">
+                  <Flag className={`h-5 w-5 ${isFlagged?'text-violet-400':'text-slate-400'}`}/>
                 </button>
               </div>
             )
