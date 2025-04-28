@@ -46,7 +46,7 @@ const SignIn: React.FC = () => {
 
   const handleZoomSignIn = () => {
     window.location.href =
-      "https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://bullfrog-ample-routinely.ngrok-free.app/oauth/callback"
+      "https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://kitten-noble-dodo.ngrok-free.app/oauth/callback"
   }
 
   return (

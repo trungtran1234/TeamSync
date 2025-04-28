@@ -165,7 +165,7 @@ const SignUp: React.FC = () => {
             <button
               type="button"
               className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              onClick={() => (window.location.href = 'https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://bullfrog-ample-routinely.ngrok-free.app/oauth/callback')} 
+              onClick={() => (window.location.href = 'https://zoom.us/oauth/authorize?response_type=code&client_id=TUNGtIReTpqReWOgVyQieQ&redirect_uri=https://kitten-noble-dodo.ngrok-free.app/oauth/callback')} 
             >
               {/* Zoom Logo or Icon */}
               <img src={zoomIcon} alt="Zoom" className="w-6 h-6 mr-2" />
