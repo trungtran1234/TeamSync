@@ -4,8 +4,12 @@ import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
 import pool from "./db.js";
-import { OpenAI } from 'openai';
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { OpenAI } from "openai";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import {
   getUserAndTokens,
@@ -32,7 +36,7 @@ const s3Client = new S3Client({
 });
 
 const lambdaClient = new LambdaClient({
-  region: process.env.AWS_REGION || 'us-west-2',
+  region: process.env.AWS_REGION || "us-west-2",
 });
 
 const openai = new OpenAI({
@@ -128,17 +132,6 @@ app.get("/meetings", async (req, res) => {
   }
 });
 
-// GET meeting summary
-app.get("/meeting/:id/summary", async (req, res) => {
-  try {
-    const url = `https://api.zoom.us/v2/meetings/${req.params.id}/meeting_summary`;
-    const data = await makeZoomRequest(url, req.query.email);
-    res.send(data);
-  } catch (error) {
-    res.status(error.status || 500).send({ error: error.message });
-  }
-});
-
 // GET meeting recordings status (used by Lambda functions)
 // GET meeting recordings status (used by Lambda functions)
 app.get("/meeting/:id/recordings", async (req, res) => {
@@ -153,7 +146,7 @@ app.get("/meeting/:id/recordings", async (req, res) => {
     // Fetch recordings from Zoom
     const recordingsUrl = `https://api.zoom.us/v2/meetings/${meetingId}/recordings`;
     const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
-    
+
     // Return the recordings data
     return res.json(recordingsData);
   } catch (error) {
@@ -201,7 +194,7 @@ app.post("/flagged-meetings", async (req, res) => {
   try {
     const result = await pool.query(
       "INSERT INTO flagged_meetings (user_id, meeting_id) VALUES ($1, $2) RETURNING *",
-      [user_id, meeting_id]
+      [user_id, meeting_id],
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -216,7 +209,7 @@ app.delete("/flagged-meetings", async (req, res) => {
   try {
     await pool.query(
       "DELETE FROM flagged_meetings WHERE user_id = $1 AND meeting_id = $2",
-      [user_id, meeting_id]
+      [user_id, meeting_id],
     );
     res.status(200).json({ message: "Flagged meeting removed" });
   } catch (error) {
@@ -231,7 +224,7 @@ app.get("/flagged-meetings", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT meeting_id FROM flagged_meetings WHERE user_id = $1",
-      [user_id]
+      [user_id],
     );
     const flaggedMeetings = result.rows.map((row) => row.meeting_id);
     res.status(200).json(flaggedMeetings);
@@ -253,14 +246,17 @@ app.post("/meeting/:id/transcript", async (req, res) => {
     //fetch reocording files
     const recordingsUrl = `https://api.zoom.us/v2/meetings/${meetingId}/recordings`;
     const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
-    
+
     //get transcript file
     const transcriptFile = recordingsData.recording_files?.find(
-      (f) => f.file_type === "TRANSCRIPT" || f.recording_type === "audio_transcript"
+      (f) =>
+        f.file_type === "TRANSCRIPT" || f.recording_type === "audio_transcript",
     );
 
     if (!transcriptFile) {
-      return res.status(404).json({ error: "transcript file not found for this meeting." });
+      return res
+        .status(404)
+        .json({ error: "transcript file not found for this meeting." });
     }
 
     // make download url w access token
@@ -310,7 +306,6 @@ app.get("/meeting/:id/transcript", async (req, res) => {
 
     res.setHeader("Content-Type", "text/vtt");
     data.Body.pipe(res);
-
   } catch (error) {
     console.error("Error retrieving transcript:", error);
     res.status(500).json({ error: "Failed to retrieve transcript" });
@@ -336,23 +331,23 @@ app.post("/summarize", async (req, res) => {
     - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
     - **Decisions made** (as bullet points)
     - **Each point made by participants** (as bullet points)
-    
+
     Don't include "Meeting Summary:" at the beginning.
-    
+
     **Meeting Transcript:**
     "${transcriptText}"
-    
+
     Provide a clear and concise summary using markdown formatting. For the action items, please use the following format:
-    
+
     **Action Items:**
     1. **Task Title:** [Short Title]
        **Description:** [Brief, actionable description]
-    
+
     Example:
     1. **UI Updates:** Update minor UI elements as discussed.
     2. **Transcript Summarization:** Complete the transcript summarization.
     3. **Dashboard Enhancements:** Display the participants list and action items on the dashboard.
-    
+
     This format ensures that the action items are simple and clear enough to be converted directly into tickets in project management tools.
     `;
 
@@ -376,11 +371,11 @@ app.post("/meeting/:id/summary-text", async (req, res) => {
   try {
     const meetingId = req.params.id;
     const { summary } = req.body;
-    
+
     if (!summary) {
       return res.status(400).json({ error: "Summary text is required" });
     }
-    
+
     const key = `summaries/meeting-${meetingId}.json`;
     const putObjectCommand = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
@@ -388,11 +383,11 @@ app.post("/meeting/:id/summary-text", async (req, res) => {
       Body: JSON.stringify({ summary, timestamp: new Date().toISOString() }),
       ContentType: "application/json",
     });
-    
+
     await s3Client.send(putObjectCommand);
-    
+
     return res.json({
-      message: "Summary stored successfully"
+      message: "Summary stored successfully",
     });
   } catch (error) {
     console.error("Error storing summary:", error);
@@ -405,12 +400,12 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
   try {
     const meetingId = req.params.id;
     const s3Key = `summaries/meeting-${meetingId}.json`;
-    
+
     const command = new GetObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: s3Key,
     });
-    
+
     try {
       const data = await s3Client.send(command);
       const summaryData = await streamToString(data.Body);
@@ -419,7 +414,9 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
       // If summary doesn't exist, generate it
       if (s3Error.$metadata && s3Error.$metadata.httpStatusCode === 404) {
         // This means the summary needs to be generated
-        res.status(404).json({ error: "Summary not found", needsGeneration: true });
+        res
+          .status(404)
+          .json({ error: "Summary not found", needsGeneration: true });
       } else {
         throw s3Error;
       }
@@ -451,11 +448,13 @@ app.post("/meeting/:id/recording", async (req, res) => {
     const recordingsData = await makeZoomRequest(recordingsUrl, userEmail);
 
     const mp4File = recordingsData.recording_files?.find(
-      (f) => f.file_type === "MP4"
+      (f) => f.file_type === "MP4",
     );
 
     if (!mp4File) {
-      return res.status(404).json({ error: "No MP4 recording file found for this meeting." });
+      return res
+        .status(404)
+        .json({ error: "No MP4 recording file found for this meeting." });
     }
 
     const { access_token } = await getUserAndTokens(userEmail);
@@ -520,42 +519,47 @@ app.post("/zoom-webhook", async (req, res) => {
       if (event.event === "recording.completed") {
         const meetingId = event.payload.object.id;
         const hostEmail = event.payload.object.host_email;
-        
+
         if (!meetingId || !hostEmail) {
           console.error("Missing meeting ID or host email in webhook payload");
           return;
         }
 
         // Invoke AWS Lambda function to process the meeting data
-        console.log(`Invoking Lambda function for meeting ${meetingId} hosted by ${hostEmail}`);
-        
+        console.log(
+          `Invoking Lambda function for meeting ${meetingId} hosted by ${hostEmail}`,
+        );
+
         // Make sure we're using the correct region
-        const lambdaRegion = process.env.AWS_REGION || 'us-west-1';
+        const lambdaRegion = process.env.AWS_REGION || "us-west-1";
         console.log(`Using Lambda region: ${lambdaRegion}`);
-        
+
         // Create a Lambda client with the specific region
         const lambdaClient = new LambdaClient({
-          region: lambdaRegion
+          region: lambdaRegion,
         });
-        
+
         // Get the function name from environment variables
-        const functionName = process.env.MEETING_PROCESSOR_LAMBDA || 'teamSync-meeting-processor';
+        const functionName =
+          process.env.MEETING_PROCESSOR_LAMBDA || "teamSync-meeting-processor";
         console.log(`Invoking Lambda function: ${functionName}`);
-        
+
         const params = {
           FunctionName: functionName,
-          InvocationType: 'Event', // Asynchronous invocation
+          InvocationType: "Event", // Asynchronous invocation
           Payload: JSON.stringify({
             meetingId,
             hostEmail,
-            eventType: event.event
-          })
+            eventType: event.event,
+          }),
         };
-        
+
         await lambdaClient.send(new InvokeCommand(params));
         console.log(`Successfully invoked Lambda for meeting ${meetingId}`);
       } else if (event.event === "meeting.ended") {
-        console.log("Meeting ended event received - waiting for recordings to be processed by Zoom");
+        console.log(
+          "Meeting ended event received - waiting for recordings to be processed by Zoom",
+        );
       }
     } catch (error) {
       console.error("Error processing webhook event:", error);
@@ -569,6 +573,15 @@ app.post("/zoom-webhook", async (req, res) => {
   }
 });
 
+// Helper function to convert stream to string
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

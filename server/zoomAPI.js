@@ -65,6 +65,9 @@ export const makeZoomRequest = async (url, userEmail, options = {}) => {
     const userData = await getUserAndTokens(userEmail);
     const { access_token, refresh_token, id: userId } = userData;
 
+    console.log(`Making Zoom request to: ${url}`);
+    console.log(`Using access token: ${access_token.substring(0, 10)}...`);
+
     try {
       const response = await axios.get(url, {
         headers: {
@@ -72,9 +75,18 @@ export const makeZoomRequest = async (url, userEmail, options = {}) => {
         },
         ...options,
       });
+      console.log(`Response status: ${response.status}`);
+      console.log(
+        `Response data: ${JSON.stringify(response.data).substring(0, 200)}...`,
+      );
       return response.data;
     } catch (error) {
+      console.error(`Zoom API error: ${error.message}`);
+      console.error(`Response status: ${error.response?.status}`);
+      console.error(`Response data: ${JSON.stringify(error.response?.data)}`);
+
       if (error.response?.status === 401) {
+        console.log(`Attempting to refresh token for user ${userId}`);
         const newTokens = await refreshAccessToken(userId, refresh_token);
         const retryResponse = await axios.get(url, {
           headers: {
@@ -83,6 +95,9 @@ export const makeZoomRequest = async (url, userEmail, options = {}) => {
           ...options,
         });
         return retryResponse.data;
+      }
+      if (error.response?.data) {
+        console.error("Zoom API error response:", error.response.data);
       }
       throw error;
     }

@@ -4,6 +4,7 @@ import SignUp from './forms/SignUp';
 import Dashboard from './Dashboard';  
 import MeetingDetails from "./MeetingDetails";
 import Settings from "./Settings";
+import Calendar from "./Calendar";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/meeting/:id" element={<MeetingDetails />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/calendar" element={<Calendar />} />
       </Routes>
     </Router>
   );

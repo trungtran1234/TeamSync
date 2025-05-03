@@ -1,14 +1,33 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { Pool } = require('pg');
 const axios = require('axios');
 
 // Initialize AWS services
-const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
-const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' });
+const AWS_REGION = 'us-west-1';  // Hardcode to us-west-1 since that's where our Lambda is
+const lambdaClient = new LambdaClient({ region: AWS_REGION });
+const sesClient = new SESClient({ region: AWS_REGION });
+
+// Initialize database pool
+const createPool = () => {
+  return new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+};
+
+let pool;
 
 // Environment variables will be set in the Lambda configuration
 const BUCKET_NAME = process.env.S3_BUCKET_NAME;
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'teamsync.group@gmail.com';
 
 /**
  * AWS Lambda function to process Zoom meeting data
@@ -135,7 +154,38 @@ async function generateSummary(meetingId, hostEmail) {
   try {
     console.log(`Generating summary for meeting ${meetingId}`);
     
-    // 1. Fetch the transcript
+    // 1. Get all participants' emails from Zoom API
+    let participantEmails = [];
+    try {
+      console.log('Fetching participants from Zoom API for meeting:', meetingId);
+      const participantsResponse = await axios.get(
+        `${API_BASE_URL}/meeting/${meetingId}/participants?email=${encodeURIComponent(hostEmail)}`,
+        { timeout: 10000 }
+      );
+      
+      if (!participantsResponse.data || !participantsResponse.data.participants) {
+        console.log('No participants found, falling back to host email');
+        participantEmails = [hostEmail];
+      } else {
+        // Extract unique emails from participants
+        const participants = participantsResponse.data.participants;
+        participantEmails = [...new Set(participants.map(p => p.user_email).filter(Boolean))];
+        
+        // Add host email if not already in the list
+        if (!participantEmails.includes(hostEmail)) {
+          participantEmails.push(hostEmail);
+        }
+        console.log(`Found ${participantEmails.length} participants:`, participantEmails);
+      }
+    } catch (apiError) {
+      console.error('Error fetching participants from Zoom:', apiError);
+      // Fallback to just the host email
+      console.log('Using host email as fallback');
+      participantEmails = [hostEmail];
+    }
+    
+    // 2. Fetch the transcript
+    console.log('Fetching transcript...');
     const transcriptResponse = await axios.get(
       `${API_BASE_URL}/meeting/${meetingId}/transcript`,
       { timeout: 10000 }
@@ -147,7 +197,8 @@ async function generateSummary(meetingId, hostEmail) {
     
     const transcriptText = transcriptResponse.data;
     
-    // 2. Generate summary using OpenAI
+    // 3. Generate summary using OpenAI
+    console.log('Generating summary using OpenAI...');
     const summaryResponse = await axios.post(
       `${API_BASE_URL}/summarize`,
       { transcriptText },
@@ -163,7 +214,8 @@ async function generateSummary(meetingId, hostEmail) {
     
     const summary = summaryResponse.data.summary;
     
-    // 3. Store summary in S3
+    // 4. Store summary in S3
+    console.log('Storing summary in S3...');
     await axios.post(
       `${API_BASE_URL}/meeting/${meetingId}/summary-text`,
       { summary },
@@ -173,10 +225,55 @@ async function generateSummary(meetingId, hostEmail) {
       }
     );
     
-    console.log(`Successfully generated and stored summary for meeting ${meetingId}`);
+    // 5. Send email to all participants
+    console.log('Sending emails to all participants...');
+    try {
+      const emailParams = {
+        Destination: {
+          BccAddresses: participantEmails // Use BCC to hide other recipients' emails
+        },
+        Message: {
+          Body: {
+            Html: {
+              Charset: "UTF-8",
+              Data: `
+                <h2>Meeting Summary</h2>
+                <p>Here's the summary of your meeting (ID: ${meetingId}):</p>
+                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+                  ${summary}
+                </div>
+                <p>Best regards,<br>TeamSync</p>
+              `
+            }
+          },
+          Subject: {
+            Charset: "UTF-8",
+            Data: `Meeting Summary - ${new Date().toLocaleDateString()}`
+          }
+        },
+        Source: SENDER_EMAIL
+      };
+
+      await sesClient.send(new SendEmailCommand(emailParams));
+      console.log('Emails sent successfully to all participants');
+    } catch (emailError) {
+      console.error('Error sending emails:', emailError);
+      // Don't throw the error, just log it and continue
+    }
+    
+    console.log(`Successfully generated, stored, and emailed summary for meeting ${meetingId}`);
     return true;
   } catch (error) {
     console.error(`Error generating summary for meeting ${meetingId}:`, error);
     throw error;
+  } finally {
+    // Clean up database connection
+    if (pool) {
+      try {
+        await pool.end();
+      } catch (err) {
+        console.error('Error closing database pool:', err);
+      }
+    }
   }
 }
