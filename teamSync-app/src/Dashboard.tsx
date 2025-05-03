@@ -27,7 +27,6 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"recent" | "flagged" | "all">("recent")
   const [flaggedMeetings, setFlaggedMeetings] = useState<Set<number>>(new Set())
   const [menuOpen, setMenuOpen] = useState(false)
-  const [showProfileModal, setShowProfileModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null)
   const [userInitial, setUserInitial] = useState<string>("")
@@ -154,29 +153,12 @@ const Dashboard: React.FC = () => {
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-md shadow-lg z-10">
-                <button onClick={() => { setShowProfileModal(true); setMenuOpen(false) }} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Profile</button>
+                <button onClick={() => navigate("/settings")} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Settings</button>
                 <button onClick={() => navigate("/signin")} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Sign Out</button>
               </div>
             )}
           </div>
         </div>
-
-        {/* Profile Modal */}
-        {showProfileModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
-            <div className="bg-slate-800 rounded-xl p-8 w-full max-w-lg">
-              <h3 className="text-lg font-semibold text-white mb-4">Linked accounts</h3>
-              <div className="space-y-4">
-                {['asana','jira','trello','email'].map(key => (
-                  <div key={key}>
-                    <label className="block text-sm text-slate-200 capitalize">{key}</label>
-                    <input className="mt-1 w-full bg-slate-700 text-white placeholder-slate-400 border border-slate-600 rounded-md p-2 focus:ring-violet-500 focus:border-violet-500" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Search Bar */}
         <div className="relative max-w-2xl mb-8">

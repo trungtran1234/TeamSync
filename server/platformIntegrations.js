@@ -142,13 +142,14 @@ export const connectToPlatform = async (req, res) => {
     const { email, ...platformData } = req.body;
     const { platform } = req.params;
     
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
+    // For Jira, make sure the jira email is available
+    if (platform === 'jira' && platformData.email) {
+      // Use jira email for auth, nothing changes here
+    } else if (platform === 'jira') {
+      // If missing, use the TeamSync user email as fallback
+      platformData.email = email;
     }
 
-    if (!['jira', 'trello', 'asana'].includes(platform)) {
-      return res.status(400).json({ error: "Invalid platform" });
-    }
 
     const userId = await getUserIdFromEmail(email);
 
@@ -321,27 +322,113 @@ const testPlatformConnection = async (platform, platformData) => {
       throw new Error("Invalid platform");
   }
 };
-
-// Test Jira connection
 const testJiraConnection = async ({ siteUrl, email, apiToken, projectKey }) => {
   try {
-    const url = `${siteUrl}/rest/api/2/project/${projectKey}`;
-    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+    // Log all input parameters (redacting the token partially)
+    console.log('DEBUG: Jira connection test parameters:');
+    console.log('- siteUrl:', siteUrl);
+    console.log('- email:', email);
+    console.log('- apiToken:', apiToken.substring(0, 3) + '...' + apiToken.substring(apiToken.length - 3));
     
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Accept': 'application/json'
+    // Remove any trailing slashes from the URL
+    const baseUrl = siteUrl.endsWith('/') ? siteUrl.slice(0, -1) : siteUrl;
+    const url = `${baseUrl}/rest/api/3/myself`;
+    
+    // Create auth string EXACTLY as Postman would
+    const authString = `${email}:${apiToken}`;
+    console.log('DEBUG: Auth string (before encoding):', email + ':' + apiToken.substring(0, 3) + '...');
+    
+    // Log the raw auth string length to check for extra spaces or characters
+    console.log('DEBUG: Auth string length:', authString.length);
+    
+    // Base64 encode using Buffer
+    const auth = Buffer.from(authString).toString('base64');
+    console.log('DEBUG: Encoded auth (first 10 chars):', auth.substring(0, 10) + '...');
+    
+    // Try URL encoding the email and token first (in case of special characters)
+    const encodedEmail = encodeURIComponent(email);
+    const encodedToken = encodeURIComponent(apiToken);
+    
+    // Create a collection of auth approaches to try
+    const authMethods = [
+      // Method 1: Standard Buffer encoding (what we've been using)
+      {
+        name: 'Standard Buffer encoding',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json'
+        }
+      },
+      // Method 2: Using URL encoded values first
+      {
+        name: 'URL encoded values',
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`${encodedEmail}:${encodedToken}`).toString('base64')}`,
+          'Accept': 'application/json'
+        }
+      },
+      // Method 3: Using btoa (browser standard) if available
+      {
+        name: 'Global btoa (if available)',
+        headers: {
+          'Authorization': `Basic ${global.btoa ? global.btoa(authString) : auth}`,
+          'Accept': 'application/json'
+        }
       }
-    });
+    ];
+    
+    // Try each auth method in sequence
+    let response;
+    let successMethod;
+    
+    for (const method of authMethods) {
+      try {
+        console.log(`DEBUG: Trying auth method: ${method.name}`);
+        
+        // Make the request with this auth method
+        response = await axios.get(url, { headers: method.headers });
+        
+        // If we got here, it worked!
+        console.log(`DEBUG: Auth success with method: ${method.name}`);
+        successMethod = method.name;
+        break;
+      } catch (error) {
+        console.error(`DEBUG: Auth method ${method.name} failed:`, 
+                     error.response?.status, 
+                     error.response?.statusText);
+      }
+    }
+    
+    if (!response) {
+      throw new Error('All authentication methods failed');
+    }
+    
+    console.log(`Jira authentication successful using method: ${successMethod}`);
+    
+    // Process project check if needed
+    if (projectKey) {
+      // Use the successful auth method for the project check
+      try {
+        console.log(`Checking if project ${projectKey} exists...`);
+        const projectUrl = `${baseUrl}/rest/api/3/project/${projectKey}`;
+        
+        await axios.get(projectUrl, { 
+          headers: authMethods.find(m => m.name === successMethod).headers 
+        });
+        
+        console.log(`Project ${projectKey} found`);
+      } catch (projectError) {
+        console.error("Project check failed:", projectError.response?.data || projectError.message);
+        throw new Error(projectError.response?.data?.errorMessages?.[0] || "Project not found");
+      }
+    }
     
     return response.data;
   } catch (error) {
     console.error("Jira connection test failed:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.errorMessages?.[0] || "Could not connect to Jira");
+    throw new Error(error.response?.data?.errorMessages?.[0] || error.message || "Could not connect to Jira");
   }
 };
-
 // Test Trello connection
 const testTrelloConnection = async ({ apiKey, apiToken, boardId }) => {
   try {
