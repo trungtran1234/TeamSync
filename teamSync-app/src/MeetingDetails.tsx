@@ -294,129 +294,154 @@ const MeetingDetails = () => {
     return sections;
   };
 
-  const renderSectionContent = (content: string[], sectionTitle: string) => {
-    const contentText = content.join('\n');
+const renderSectionContent = (content: string[], sectionTitle: string) => {
+  const contentText = content.join('\n');
+  
+  // Special handling for Action Items and other list-based sections
+  if (sectionTitle.includes("Action") || sectionTitle.includes("Tasks") || sectionTitle.includes("To-Do")) {
+    // Parsing logic to extract action items and descriptions
+    const actionItems: {number: string; title: string; description: string}[] = [];
+    let currentItem: {number: string; title: string; description: string} | null = null;
     
-    // Special handling for Action Items and other list-based sections
-    if (sectionTitle.includes("Action") || sectionTitle.includes("Tasks") || sectionTitle.includes("To-Do")) {
-      return (
-        <ul className="list-none">
-          {content.map((line: string, index: number) => {
-            // Skip empty lines
-            if (!line.trim()) return null;
-            
-            // Check for different action item formats
-            // These patterns extract the actual title and description from the meeting summary
-            const numberedTaskMatch = line.match(/^(\d+)\.\s+\*\*([^:]+):\*\*\s*(.*)/);
-            const bulletTaskMatch = line.match(/^[*-]\s+\*\*([^:]+):\*\*\s*(.*)/);
-            const simpleBulletMatch = line.match(/^[*-]\s+(.*)/);
-            
-            // Format: "1. **Actual Task Title:** Actual description text"
-            if (numberedTaskMatch) {
-              const [_, number, title, description] = numberedTaskMatch;
-              
-              // Clean any "Task Title" placeholder text
-              const cleanTitle = title.replace(/Task Title/g, '').trim();
-              const cleanDescription = description.replace(/^\*\*Description:\*\*\s*/i, '').trim();
-              
-              return (
-                <li key={index} className="mb-5">
-                  <div className="action-item-container">
-                    <div className="flex items-center mb-2">
-                      <div className="flex-shrink-0 h-6 w-6 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold mr-2 text-sm">
-                        {number} {cleanTitle}
-                      </div>
-                      {/* <h4 className="text-amber-400 font-bold inline-block">{cleanTitle}</h4> */}
-                    </div>
-                    {cleanDescription && (
-                      <div className="ml-8 text-white pl-3 border-l-2 border-slate-600">
-                        <div className="flex items-start">
-                          <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
-                          <span>{cleanDescription}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              );
-            }
-            
-            // Format: "- **Actual Task Title:** Actual description text"
-            else if (bulletTaskMatch) {
-              const [_, title, description] = bulletTaskMatch;
-              
-              // Clean any "Task Title" placeholder text
-              const cleanTitle = title.replace(/Task Title/g, '').trim();
-              const cleanDescription = description.replace(/^\*\*Description:\*\*\s*/i, '').trim();
-              
-              return (
-                <li key={index} className="mb-5">
-                  <div className="action-item-container">
-                    <div className="flex items-center mb-2">
+    content.forEach((line: string) => {
+      if (!line.trim()) return;
       
-                      <h4 className="text-amber-400 font-bold inline-block">{cleanTitle}</h4>
-                    </div>
-                    {cleanDescription && (
-                      <div className="ml-8 text-white pl-3 border-l-2 border-slate-600">
-                        <div className="flex items-start">
-                          <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
-                          <span>{cleanDescription}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              );
-            }
-            
-            // Case 3: Simple bullet point
-            else if (simpleBulletMatch) {
-              return (
-                <li key={index} className="mb-3 p-3 bg-slate-700 rounded-md border-l-4 border-amber-500 flex items-start">
-                  <FaRegDotCircle className="text-amber-500 mr-2 mt-1 flex-shrink-0" />
-                  <span>{simpleBulletMatch[1]}</span>
-                </li>
-              );
-            }
-            
-            // Default case: render as is
-            else {
-              return (
-                <li key={index} className="mb-3 p-3 bg-slate-700 rounded-md border-l-4 border-amber-500 flex items-start">
-                  <FaRegDotCircle className="text-amber-500 mr-2 mt-1 flex-shrink-0" />
-                  <span>{line}</span>
-                </li>
-              );
-            }
-          })}
-        </ul>
-      );
+      // Check for "Task Title:" pattern which is shown in the screenshot
+      const taskTitleMatch = line.match(/^Task Title:\s*(.*)/i);
+      const numberWithTaskMatch = line.match(/^(\d+)\s+Task Title:\s*(.*)/i);
+      
+      // Handle regular numbered items or bullets
+      const numberMatch = line.match(/^(\d+)\.?\s+(.*)/);
+      const circleMatch = line.match(/^[◉⦿○●]\s+(.*)/);
+      const bulletMatch = line.match(/^[*-]\s+(.*)/);
+      
+      // Look for description lines without "**Description:**" prefix
+      const descriptionMatch = line.match(/^\s*\*\*Description:\*\*\s*(.*)/i) || 
+                              line.match(/^\s*\*\*.*:\*\*\s*(.*)/i);
+      
+      if (taskTitleMatch || numberWithTaskMatch) {
+        if (currentItem) {
+          actionItems.push(currentItem);
+        }
+        
+        // Create new item from Task Title format
+        currentItem = {
+          number: numberWithTaskMatch ? numberWithTaskMatch[1] : (actionItems.length + 1).toString(),
+          title: (taskTitleMatch ? taskTitleMatch[1] : numberWithTaskMatch ? numberWithTaskMatch[2] : "").trim(),
+          description: ''
+        };
+      }
+      else if (numberMatch) {
+        if (currentItem) {
+          actionItems.push(currentItem);
+        }
+        
+        currentItem = {
+          number: numberMatch[1],
+          title: numberMatch[2].replace(/\*\*/g, '').trim(),
+          description: ''
+        };
+      } 
+      else if (circleMatch || bulletMatch) {
+        if (currentItem) {
+          actionItems.push(currentItem);
+        }
+        
+        currentItem = {
+          number: (actionItems.length + 1).toString(),
+          title: (circleMatch ? circleMatch[1] : bulletMatch ? bulletMatch[1] : '').replace(/\*\*/g, '').trim(),
+          description: ''
+        };
+      }
+      else if (descriptionMatch && currentItem) {
+        currentItem.description = descriptionMatch[1].trim();
+      }
+      else if (line.includes("**Description:**") && currentItem) {
+        const parts = line.split("**Description:**");
+        if (parts.length > 1) {
+          currentItem.description = parts[1].trim();
+        }
+      }
+      else if (currentItem) {
+        if (currentItem.description) {
+          currentItem.description += ' ' + line.trim();
+        } else {
+          currentItem.description = line.trim();
+        }
+      }
+      else {
+        currentItem = {
+          number: (actionItems.length + 1).toString(),
+          title: line.replace(/\*\*/g, '').trim(),
+          description: ''
+        };
+      }
+    });
+    
+    if (currentItem) {
+      actionItems.push(currentItem);
     }
     
-    // For other sections, just use ReactMarkdown
+    // Render with enhanced styling but without "**Description:**" text
     return (
-      <div className="prose prose-invert prose-li:my-2 text-lg">
-        <ReactMarkdown 
-          remarkPlugins={[remarkGfm]}
-          components={{
-            // Customize list items
-            li: ({children, ...props}) => (
-              <li className="mb-2 flex items-start" {...props}>
-                <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
-                <span>{children}</span>
-              </li>
-            ),
-            // Customize paragraphs
-            p: ({children, ...props}) => (
-              <p className="mb-3 text-lg" {...props}>{children}</p>
-            )
-          }}
-        >
-          {contentText}
-        </ReactMarkdown>
-      </div>
+      <ul className="list-none space-y-8">
+        {actionItems.map((item, index) => (
+          <li key={index} className="bg-slate-800 rounded-lg p-5 shadow-lg border-l-4 border-amber-500">
+            <div className="flex items-center mb-3">
+              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold mr-3 shadow-md">
+                {item.number}
+              </div>
+              <h4 className="text-amber-400 font-semibold text-xl">
+                {item.title.includes("Task Title:") ? item.title.replace("Task Title:", "").trim() : item.title}
+              </h4>
+            </div>
+            {item.description && (
+              <div className="ml-11 mt-2">
+                <div className="text-white">
+                  <span className="text-lg">{item.description}</span>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
     );
-  };
+  }
+  
+  // Enhanced styling for other sections
+  return (
+    <div className="prose prose-invert prose-li:my-2 text-lg">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Enhanced list items
+          li: ({children, ...props}) => (
+            <li className="mb-3 flex items-start bg-slate-800 p-3 rounded-md" {...props}>
+              <FaRegDotCircle className="text-teal-400 mr-3 mt-1 flex-shrink-0" />
+              <span className="text-lg">{children}</span>
+            </li>
+          ),
+          // Enhanced paragraphs
+          p: ({children, ...props}) => (
+            <p className="mb-4 text-lg leading-relaxed" {...props}>{children}</p>
+          ),
+          // Enhanced headings
+          h1: ({children, ...props}) => (
+            <h1 className="text-3xl font-bold mb-4 text-teal-400" {...props}>{children}</h1>
+          ),
+          h2: ({children, ...props}) => (
+            <h2 className="text-2xl font-bold mb-3 text-teal-400" {...props}>{children}</h2>
+          ),
+          h3: ({children, ...props}) => (
+            <h3 className="text-xl font-bold mb-3 text-teal-400" {...props}>{children}</h3>
+          )
+        }}
+      >
+        {contentText}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
   const getSectionIcon = (sectionTitle: string) => {
     const title = sectionTitle.toLowerCase();
