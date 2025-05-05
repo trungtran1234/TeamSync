@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useParams, useNavigate } from "react-router-dom";
 import SyncActionItems from "./components/SyncActionItems";
+import { FaTasks, FaListUl, FaLightbulb, FaCheckCircle, FaRegDotCircle } from "react-icons/fa";
 
 interface Participant {
   name?: string;
@@ -23,6 +24,16 @@ interface MeetingDetails {
 interface SummaryData {
   summary: string;
   timestamp: string;
+}
+
+interface SectionContent {
+  [key: string]: string[];
+}
+
+interface SectionStyle {
+  borderColor: string;
+  textColor: string;
+  bgColor: string;
 }
 
 const MeetingDetails = () => {
@@ -158,6 +169,307 @@ const MeetingDetails = () => {
     return date.toLocaleString();
   };
 
+  const renderFormattedSummary = (summaryText: string) => {
+    // Parse the summary to identify different sections
+    const sections = parseSummaryIntoSections(summaryText);
+    
+    // Generate table of contents if there are sections
+    const hasSections = Object.keys(sections).length > 0;
+    
+    return (
+      <div className="formatted-summary">
+        {hasSections && (
+          <div className="summary-toc mb-6 p-4 bg-slate-700 rounded-lg">
+            <h3 className="text-xl font-semibold mb-2">Table of Contents</h3>
+            <ul className="list-disc list-inside">
+              {Object.keys(sections).map((sectionTitle) => (
+                <li key={sectionTitle} className="mb-1">
+                  <a 
+                    href={`#${sectionTitle.toLowerCase().replace(/\s+/g, '-')}`}
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    {sectionTitle}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {hasSections ? (
+          Object.entries(sections).map(([sectionTitle, content]) => (
+            <div 
+              key={sectionTitle}
+              id={sectionTitle.toLowerCase().replace(/\s+/g, '-')}
+              className={`summary-section mb-6 p-4 rounded-lg border-l-4 ${getSectionStyles(sectionTitle).borderColor}`}
+            >
+              <h3 className={`text-xl font-bold mb-3 flex items-center ${getSectionStyles(sectionTitle).textColor}`}>
+                {getSectionIcon(sectionTitle)}
+                <span className="ml-2">{sectionTitle}</span>
+              </h3>
+              <div className="section-content">
+                {renderSectionContent(content, sectionTitle)}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="prose prose-invert text-lg">
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+            >
+              {summaryText}
+            </ReactMarkdown>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const parseSummaryIntoSections = (summaryText: string): SectionContent => {
+    const sections: SectionContent = {};
+    let currentSection = "Overview";
+    let currentContent: string[] = [];
+    
+    // Common section titles in meeting summaries
+    const sectionTitles = [
+      "Action Items", "Action Points", "Tasks", "To-Dos",
+      "Agenda", "Topics", "Discussion Points",
+      "Key Points", "Main Points", "Highlights", "Notes",
+      "Decisions", "Conclusions", "Outcomes", "Resolutions",
+      "Attendees", "Participants"
+    ];
+    
+    // Split the text into lines and process each line
+    const lines = summaryText.split('\n');
+    
+    lines.forEach((line: string) => {
+      // Check if the line is a section header
+      const sectionMatch = line.match(/^#+\s+(.+)$/);
+      const listHeaderMatch = line.match(/^[*-]\s+\*\*(.+?):\*\*/);
+      const boldLineMatch = line.match(/^\*\*(.+?):\*\*/);
+      
+      if (sectionMatch) {
+        // If it's a markdown header, use it as a section title
+        const potentialTitle = sectionMatch[1].trim();
+        
+        // If it's a recognized section or ends with a colon
+        if (sectionTitles.some(title => potentialTitle.includes(title)) || 
+            potentialTitle.endsWith(':')) {
+          currentSection = potentialTitle.replace(/:$/, '');
+          currentContent = [];
+          sections[currentSection] = currentContent;
+        } else {
+          // Just add it to the current section
+          currentContent.push(line);
+        }
+      } else if (listHeaderMatch || boldLineMatch) {
+        // If it's a list item with a bold prefix like "**Action Items:**"
+        const potentialTitle = (listHeaderMatch ? listHeaderMatch[1] : boldLineMatch?.[1] || "").trim();
+        
+        if (sectionTitles.some(title => potentialTitle.includes(title))) {
+          currentSection = potentialTitle;
+          currentContent = [];
+          sections[currentSection] = currentContent;
+          
+          // If there's content after the bold part, add it
+          const contentAfterBold = line.replace(/^[*-]\s+\*\*(.+?):\*\*\s*/, '').trim();
+          if (contentAfterBold) {
+            currentContent.push(contentAfterBold);
+          }
+        } else {
+          // Just add it to the current section
+          currentContent.push(line);
+        }
+      } else {
+        // Add the line to the current section
+        currentContent.push(line);
+      }
+    });
+    
+    // If no sections were identified, put everything in Overview
+    if (Object.keys(sections).length === 0 && currentContent.length > 0) {
+      sections["Overview"] = currentContent;
+    }
+    
+    return sections;
+  };
+
+  const renderSectionContent = (content: string[], sectionTitle: string) => {
+    const contentText = content.join('\n');
+    
+    // Special handling for Action Items and other list-based sections
+    if (sectionTitle.includes("Action") || sectionTitle.includes("Tasks") || sectionTitle.includes("To-Do")) {
+      return (
+        <ul className="list-none">
+          {content.map((line: string, index: number) => {
+            // Skip empty lines
+            if (!line.trim()) return null;
+            
+            // Check for different action item formats
+            // These patterns extract the actual title and description from the meeting summary
+            const numberedTaskMatch = line.match(/^(\d+)\.\s+\*\*([^:]+):\*\*\s*(.*)/);
+            const bulletTaskMatch = line.match(/^[*-]\s+\*\*([^:]+):\*\*\s*(.*)/);
+            const simpleBulletMatch = line.match(/^[*-]\s+(.*)/);
+            
+            // Format: "1. **Actual Task Title:** Actual description text"
+            if (numberedTaskMatch) {
+              const [_, number, title, description] = numberedTaskMatch;
+              
+              // Clean any "Task Title" placeholder text
+              const cleanTitle = title.replace(/Task Title/g, '').trim();
+              const cleanDescription = description.replace(/^\*\*Description:\*\*\s*/i, '').trim();
+              
+              return (
+                <li key={index} className="mb-5">
+                  <div className="action-item-container">
+                    <div className="flex items-center mb-2">
+                      <div className="flex-shrink-0 h-6 w-6 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold mr-2 text-sm">
+                        {number} {cleanTitle}
+                      </div>
+                      {/* <h4 className="text-amber-400 font-bold inline-block">{cleanTitle}</h4> */}
+                    </div>
+                    {cleanDescription && (
+                      <div className="ml-8 text-white pl-3 border-l-2 border-slate-600">
+                        <div className="flex items-start">
+                          <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
+                          <span>{cleanDescription}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            }
+            
+            // Format: "- **Actual Task Title:** Actual description text"
+            else if (bulletTaskMatch) {
+              const [_, title, description] = bulletTaskMatch;
+              
+              // Clean any "Task Title" placeholder text
+              const cleanTitle = title.replace(/Task Title/g, '').trim();
+              const cleanDescription = description.replace(/^\*\*Description:\*\*\s*/i, '').trim();
+              
+              return (
+                <li key={index} className="mb-5">
+                  <div className="action-item-container">
+                    <div className="flex items-center mb-2">
+      
+                      <h4 className="text-amber-400 font-bold inline-block">{cleanTitle}</h4>
+                    </div>
+                    {cleanDescription && (
+                      <div className="ml-8 text-white pl-3 border-l-2 border-slate-600">
+                        <div className="flex items-start">
+                          <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
+                          <span>{cleanDescription}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            }
+            
+            // Case 3: Simple bullet point
+            else if (simpleBulletMatch) {
+              return (
+                <li key={index} className="mb-3 p-3 bg-slate-700 rounded-md border-l-4 border-amber-500 flex items-start">
+                  <FaRegDotCircle className="text-amber-500 mr-2 mt-1 flex-shrink-0" />
+                  <span>{simpleBulletMatch[1]}</span>
+                </li>
+              );
+            }
+            
+            // Default case: render as is
+            else {
+              return (
+                <li key={index} className="mb-3 p-3 bg-slate-700 rounded-md border-l-4 border-amber-500 flex items-start">
+                  <FaRegDotCircle className="text-amber-500 mr-2 mt-1 flex-shrink-0" />
+                  <span>{line}</span>
+                </li>
+              );
+            }
+          })}
+        </ul>
+      );
+    }
+    
+    // For other sections, just use ReactMarkdown
+    return (
+      <div className="prose prose-invert prose-li:my-2 text-lg">
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={{
+            // Customize list items
+            li: ({children, ...props}) => (
+              <li className="mb-2 flex items-start" {...props}>
+                <FaRegDotCircle className="text-slate-400 mr-2 mt-1 flex-shrink-0 text-xs" />
+                <span>{children}</span>
+              </li>
+            ),
+            // Customize paragraphs
+            p: ({children, ...props}) => (
+              <p className="mb-3 text-lg" {...props}>{children}</p>
+            )
+          }}
+        >
+          {contentText}
+        </ReactMarkdown>
+      </div>
+    );
+  };
+
+  const getSectionIcon = (sectionTitle: string) => {
+    const title = sectionTitle.toLowerCase();
+    
+    if (title.includes("action") || title.includes("task") || title.includes("to-do")) {
+      return <FaTasks className="flex-shrink-0" />;
+    } else if (title.includes("agenda") || title.includes("topic")) {
+      return <FaListUl className="flex-shrink-0" />;
+    } else if (title.includes("key") || title.includes("highlight") || title.includes("main") || title.includes("note")) {
+      return <FaLightbulb className="flex-shrink-0" />;
+    } else if (title.includes("decision") || title.includes("conclusion") || title.includes("outcome") || title.includes("resolution")) {
+      return <FaCheckCircle className="flex-shrink-0" />;
+    } else {
+      return <FaRegDotCircle className="flex-shrink-0" />;
+    }
+  };
+
+  const getSectionStyles = (sectionTitle: string): SectionStyle => {
+    const title = sectionTitle.toLowerCase();
+    
+    if (title.includes("action") || title.includes("task") || title.includes("to-do")) {
+      return {
+        borderColor: "border-amber-500",
+        textColor: "text-amber-500",
+        bgColor: "bg-slate-700"
+      };
+    } else if (title.includes("agenda") || title.includes("topic")) {
+      return {
+        borderColor: "border-blue-400",
+        textColor: "text-blue-400",
+        bgColor: "bg-slate-700"
+      };
+    } else if (title.includes("key") || title.includes("highlight") || title.includes("main") || title.includes("note")) {
+      return {
+        borderColor: "border-teal-400",
+        textColor: "text-teal-400",
+        bgColor: "bg-slate-700"
+      };
+    } else if (title.includes("decision") || title.includes("conclusion") || title.includes("outcome") || title.includes("resolution")) {
+      return {
+        borderColor: "border-green-400",
+        textColor: "text-green-400",
+        bgColor: "bg-slate-700"
+      };
+    } else {
+      return {
+        borderColor: "border-purple-400",
+        textColor: "text-purple-400",
+        bgColor: "bg-slate-700"
+      };
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-slate-900 text-white p-8">
@@ -282,9 +594,13 @@ const MeetingDetails = () => {
             {loading ? (
               <p>Loading summary...</p>
             ) : (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {summary || "No summary available"}
-              </ReactMarkdown>
+              <div className="meeting-summary-container text-lg">
+                {summary ? (
+                  renderFormattedSummary(summary)
+                ) : (
+                  "No summary available"
+                )}
+              </div>
             )}
           </div>
         </div>
