@@ -21,7 +21,8 @@ import {
   getIntegrationDetails,
   connectToPlatform,
   disconnectFromPlatform,
-  syncActionItems
+  syncActionItems,
+  syncActionItemsToAllPlatforms
 } from "./platformIntegrations.js";
 
 dotenv.config();
@@ -321,40 +322,42 @@ app.post("/summarize", async (req, res) => {
       return res.status(400).json({ error: "Transcript is required" });
     }
 
-    const prompt = `You are an AI-powered meeting assistant. Your job is to analyze the following meeting transcript and generate a professional, structured summary. Ensure the summary includes:
-    - **Key discussion points** (as bullet points)
-    - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
-    - **Decisions made** (as bullet points)
-    - **Each point made by participants** (as bullet points)
-    
-    - **Key discussion points** (as bullet points)
-    - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
-    - **Decisions made** (as bullet points)
-    - **Each point made by participants** (as bullet points)
+    const prompt = `You are an AI-powered meeting assistant. Your job is to analyze the following meeting transcript and generate a professional, structured summary that follows a STRICT FORMAT. 
 
-    Don't include "Meeting Summary:" at the beginning.
+The summary must have these CLEARLY SEPARATED SECTIONS with the exact headings shown below:
 
-    **Meeting Transcript:**
-    "${transcriptText}"
+## Key Discussion Points
+[Bullet points of the most important topics discussed]
 
-    Provide a clear and concise summary using markdown formatting. For the action items, please use the following format:
+## Action Items
+[List of action items formatted EXACTLY as shown in the example below]
 
-    **Action Items:**
-    1. **Task Title:** [Short Title]
-       **Description:** [Brief, actionable description]
+## Decisions Made
+[Bullet points of decisions reached during the meeting]
 
-    Example:
-    1. **UI Updates:** Update minor UI elements as discussed.
-    2. **Transcript Summarization:** Complete the transcript summarization.
-    3. **Dashboard Enhancements:** Display the participants list and action items on the dashboard.
+## Participant Contributions
+[Bullet points of key points made by each participant]
 
-    This format ensures that the action items are simple and clear enough to be converted directly into tickets in project management tools.
-    `;
+Most importantly, the Action Items section MUST follow this EXACT format to ensure they can be automatically parsed and synced to external task management systems:
+
+## Action Items
+1. **Task Title:** [Short, clear task title - 2-5 words]
+   **Description:** [Brief, actionable description - 10-25 words]
+2. **Task Title:** [Short, clear task title - 2-5 words]
+   **Description:** [Brief, actionable description - 10-25 words]
+
+Action items MUST be separated with numbers and each action item MUST have both a Task Title and Description field exactly as shown. Each action item should be clear, specific, and actionable.
+
+**Meeting Transcript:**
+"${transcriptText}"
+
+Make your summary concise but complete. For the action items, focus on making them clear, specific tasks that can be directly converted into tickets in project management tools.
+`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [{ role: "system", content: prompt }],
-      temperature: 0.7,
+      temperature: 0.5,
     });
 
     const summary = response.choices[0].message.content;
@@ -433,6 +436,7 @@ app.get("/integrations/:platform", getIntegrationDetails);
 app.post("/integrations/:platform", connectToPlatform);
 app.delete("/integrations/:platform", disconnectFromPlatform);
 app.post("/meeting/:id/sync-action-items", syncActionItems);
+app.post("/meeting/:id/sync-action-items-all", syncActionItemsToAllPlatforms);
 
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {

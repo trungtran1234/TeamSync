@@ -465,25 +465,172 @@ const testAsanaConnection = async ({ personalAccessToken, workspaceId }) => {
 export const parseActionItems = (summary) => {
   if (!summary) return [];
   
-  const actionItemsRegex = /\*\*Action Items:\*\*\s*([\s\S]*?)(?:\n\s*\n|\*\*|$)/;
-  const match = summary.match(actionItemsRegex);
+  try {
+    // First get the Action Items section
+    const actionItemsSection = extractActionItemsSection(summary);
+    if (!actionItemsSection) return [];
+    
+    console.log("Action Items Section:", actionItemsSection);
+    
+    // Handle the case where "Task Title:" and "Description:" are on separate lines
+    // This is a common format in our meeting summaries
+    const multiLinePattern = /(\d+\.\s+)?(?:\*\*)?Task Title:(?:\*\*)?\s*([^\n]+)\s*(?:\*\*)?Description:(?:\*\*)?\s*([^\n]+)/gi;
+    const actionItems = [];
+    
+    let actionItemMatch;
+    while ((actionItemMatch = multiLinePattern.exec(actionItemsSection)) !== null) {
+      const title = actionItemMatch[2].trim();
+      const description = actionItemMatch[3].trim();
+      
+      console.log("Found action item (multi-line):", { title, description });
+      
+      actionItems.push({
+        title,
+        description
+      });
+    }
+    
+    // If no matches found yet, try a more flexible pattern that can handle titles and descriptions
+    // separated by newlines
+    if (actionItems.length === 0) {
+      // Convert newlines to spaces temporarily to help with regex
+      const flattened = actionItemsSection.replace(/\n\s*/g, ' ');
+      const flattenedPattern = /Task Title:\s*([^Description:]+)\s*Description:\s*([^Task Title:]+)/gi;
+      
+      while ((actionItemMatch = flattenedPattern.exec(flattened)) !== null) {
+        const title = actionItemMatch[1].trim();
+        const description = actionItemMatch[2].trim();
+        
+        console.log("Found action item (flattened):", { title, description });
+        
+        actionItems.push({
+          title,
+          description
+        });
+      }
+    }
+    
+    // If still no items found, try the numbered list pattern
+    if (actionItems.length === 0) {
+      const numberedListPattern = /\d+\.\s+(?:\*\*)?([^:]+)(?:\*\*)?\s*:\s*([^\n]+)/gi;
+      while ((actionItemMatch = numberedListPattern.exec(actionItemsSection)) !== null) {
+        const title = actionItemMatch[1].trim();
+        const description = actionItemMatch[2].trim();
+        
+        console.log("Found action item (numbered list):", { title, description });
+        
+        actionItems.push({
+          title,
+          description
+        });
+      }
+    }
+    
+    // If still no items, look for Task Title/Description pairs anywhere in the text
+    if (actionItems.length === 0) {
+      // First find all Task Title instances
+      const taskTitles = [];
+      const titlePattern = /(?:\*\*)?Task Title:(?:\*\*)?\s*([^\n]+)/gi;
+      
+      while ((actionItemMatch = titlePattern.exec(actionItemsSection)) !== null) {
+        taskTitles.push({
+          title: actionItemMatch[1].trim(),
+          index: actionItemMatch.index + actionItemMatch[0].length
+        });
+      }
+      
+      // Then find all Descriptions
+      const descriptions = [];
+      const descPattern = /(?:\*\*)?Description:(?:\*\*)?\s*([^\n]+)/gi;
+      
+      while ((actionItemMatch = descPattern.exec(actionItemsSection)) !== null) {
+        descriptions.push({
+          description: actionItemMatch[1].trim(),
+          index: actionItemMatch.index
+        });
+      }
+      
+      // Match them up - each title is paired with the next description
+      if (taskTitles.length > 0 && descriptions.length > 0) {
+        for (let i = 0; i < taskTitles.length; i++) {
+          // Find the closest description that follows this title
+          const title = taskTitles[i];
+          let closestDesc = null;
+          let minDistance = Infinity;
+          
+          for (const desc of descriptions) {
+            const distance = desc.index - title.index;
+            if (distance > 0 && distance < minDistance) {
+              closestDesc = desc;
+              minDistance = distance;
+            }
+          }
+          
+          if (closestDesc) {
+            console.log("Found action item (paired):", { 
+              title: title.title, 
+              description: closestDesc.description 
+            });
+            
+            actionItems.push({
+              title: title.title,
+              description: closestDesc.description
+            });
+          }
+        }
+      }
+    }
+    
+    // Last resort - just look for any colon-separated patterns
+    if (actionItems.length === 0) {
+      const colonSeparatedPattern = /([^:]+):\s*([^\n]+)/gi;
+      while ((actionItemMatch = colonSeparatedPattern.exec(actionItemsSection)) !== null) {
+        const title = actionItemMatch[1].trim();
+        // Skip if this is a header or looks like a category, not an action item
+        if (title.toLowerCase().includes('action') || 
+            title.length > 50 || 
+            title.toLowerCase() === 'description') continue;
+        
+        console.log("Found action item (colon-separated):", { 
+          title, 
+          description: actionItemMatch[2].trim() 
+        });
+        
+        actionItems.push({
+          title,
+          description: actionItemMatch[2].trim()
+        });
+      }
+    }
+    
+    console.log(`Total action items found: ${actionItems.length}`);
+    return actionItems;
+  } catch (error) {
+    console.error("Error parsing action items:", error);
+    return [];
+  }
+};
+
+// Helper function to extract the Action Items section from the summary
+function extractActionItemsSection(summary) {
+  // Try multiple ways to identify the Action Items section
+  const patterns = [
+    /Action Items:[\s\S]*?((?=\n\s*\n\S)|\n*$)/i,  // Match until empty line followed by non-whitespace or end
+    /Action Items:([\s\S]*?)(?:\n\s*\n\S|\n*$)/i,   // Another variation
+    /Tasks:([\s\S]*?)(?:\n\s*\n\S|\n*$)/i,          // Look for "Tasks" instead
+    /To-Do:([\s\S]*?)(?:\n\s*\n\S|\n*$)/i           // Look for "To-Do" instead
+  ];
   
-  if (!match || !match[1]) return [];
-  
-  const actionItemsSection = match[1];
-  const actionItemRegex = /\d+\.\s+\*\*([^:]+):\*\*\s*([^\n]*)/g;
-  const actionItems = [];
-  
-  let actionItemMatch;
-  while ((actionItemMatch = actionItemRegex.exec(actionItemsSection)) !== null) {
-    actionItems.push({
-      title: actionItemMatch[1].trim(),
-      description: actionItemMatch[2].trim()
-    });
+  for (const pattern of patterns) {
+    const match = summary.match(pattern);
+    if (match && match[0]) {
+      return match[0];
+    }
   }
   
-  return actionItems;
-};
+  // If no section found, return the entire summary as a fallback
+  return summary;
+}
 
 // Sync action items to a platform
 export const syncActionItems = async (req, res) => {
@@ -580,6 +727,171 @@ export const syncActionItems = async (req, res) => {
   }
 };
 
+// Sync action items to all connected platforms
+export const syncActionItemsToAllPlatforms = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const meetingId = req.params.id;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    // Get user ID
+    const userId = await getUserIdFromEmail(email);
+    
+    // Get meeting summary
+    const summaryResult = await pool.query(
+      "SELECT summary FROM meeting_summaries WHERE meeting_id = $1",
+      [meetingId]
+    );
+    
+    if (summaryResult.rows.length === 0) {
+      return res.status(404).json({ error: "Meeting summary not found" });
+    }
+    
+    const summary = summaryResult.rows[0].summary;
+    
+    // Parse action items from summary
+    const actionItems = parseActionItems(summary);
+    
+    if (actionItems.length === 0) {
+      return res.status(404).json({ error: "No action items found in the meeting summary" });
+    }
+    
+    // Get user's connected platforms
+    const integrationsResult = await pool.query(
+      "SELECT platform, id FROM platform_integrations WHERE user_id = $1 AND is_active = TRUE",
+      [userId]
+    );
+    
+    if (integrationsResult.rows.length === 0) {
+      return res.status(404).json({ error: "No active platform integrations found" });
+    }
+    
+    const connectedPlatforms = integrationsResult.rows.map(row => row.platform);
+    
+    // Initialize sync status for all platforms
+    const syncStatus = {
+      jira: false,
+      trello: false,
+      asana: false
+    };
+    
+    // Track sync results for detailed reporting
+    const syncResults = {
+      successful: [],
+      failed: []
+    };
+    
+    // Process each platform in parallel
+    await Promise.all(
+      connectedPlatforms.map(async (platform) => {
+        try {
+          // Get integration details for this platform
+          const integrationResult = await pool.query(
+            `SELECT * FROM platform_integrations WHERE user_id = $1 AND platform = $2 AND is_active = TRUE`,
+            [userId, platform]
+          );
+          
+          if (integrationResult.rows.length === 0) {
+            throw new Error(`${platform} integration not found or inactive`);
+          }
+          
+          const integration = integrationResult.rows[0];
+          
+          // Process action items for this platform
+          const platformResults = [];
+          
+          for (const actionItem of actionItems) {
+            try {
+              let result;
+              
+              // Call platform-specific sync function
+              switch (platform) {
+                case 'jira':
+                  result = await syncToJira(actionItem, integration, meetingId);
+                  break;
+                case 'trello':
+                  result = await syncToTrello(actionItem, integration, meetingId);
+                  break;
+                case 'asana':
+                  result = await syncToAsana(actionItem, integration, meetingId);
+                  break;
+                default:
+                  throw new Error(`Unsupported platform: ${platform}`);
+              }
+              
+              // Record the synced item in our database
+              await recordSyncedItem(
+                userId,
+                meetingId,
+                platform,
+                result.id,
+                actionItem.title,
+                actionItem.description
+              );
+              
+              platformResults.push({
+                platform,
+                action: actionItem.title,
+                result: 'success',
+                itemId: result.id
+              });
+            } catch (error) {
+              console.error(`Error syncing item "${actionItem.title}" to ${platform}:`, error);
+              platformResults.push({
+                platform,
+                action: actionItem.title,
+                result: 'error',
+                error: error.message
+              });
+            }
+          }
+          
+          // Update sync status based on results
+          const allSuccessful = platformResults.every(result => result.result === 'success');
+          syncStatus[platform] = allSuccessful;
+          
+          if (allSuccessful) {
+            syncResults.successful.push({
+              platform,
+              itemsCount: platformResults.length
+            });
+          } else {
+            const successCount = platformResults.filter(r => r.result === 'success').length;
+            syncResults.failed.push({
+              platform,
+              successCount,
+              totalCount: platformResults.length,
+              errors: platformResults
+                .filter(r => r.result === 'error')
+                .map(r => ({ action: r.action, error: r.error }))
+            });
+          }
+        } catch (error) {
+          console.error(`Error syncing to ${platform}:`, error);
+          syncStatus[platform] = false;
+          syncResults.failed.push({
+            platform,
+            error: error.message
+          });
+        }
+      })
+    );
+    
+    // Return detailed results
+    res.json({
+      syncStatus,
+      syncResults,
+      message: "Action items sync process completed"
+    });
+  } catch (error) {
+    console.error("Error syncing action items to all platforms:", error);
+    res.status(500).json({ error: "Failed to sync action items" });
+  }
+};
+
 // Record a synced action item
 const recordSyncedItem = async (userId, meetingId, platform, platformItemId, title, description) => {
   try {
@@ -611,6 +923,35 @@ const syncToJira = async (actionItem, integration, meetingId) => {
     const apiToken = decrypt(integration.jira_api_token);
     const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
     
+    console.log("Original title:", title);
+    console.log("Original description:", description);
+    
+    // Fix the title and description extraction
+    let cleanTitle = title;
+    let cleanDescription = description;
+    
+    // If the title contains "Task Title:", it means we need to extract the actual title from it
+    if (title.includes("Task Title:")) {
+      // The title is in the format "Task Title: [actual title]"
+      cleanTitle = title.replace(/^\s*Task Title:\s*/i, '').trim();
+    }
+    
+    // If the description contains "Description:", extract the actual description
+    if (description.includes("Description:")) {
+      // The description is in the format "Description: [actual description]"
+      cleanDescription = description.replace(/^\s*Description:\s*/i, '').trim();
+    }
+    
+    // Remove any markdown formatting characters
+    cleanTitle = cleanTitle.replace(/\*\*/g, '').trim();
+    cleanDescription = cleanDescription.replace(/\*\*/g, '').trim();
+    
+    console.log("Clean title:", cleanTitle);
+    console.log("Clean description:", cleanDescription);
+    
+    // Add more context to the Jira description
+    const jiraDescription = `${cleanDescription}\n\nFrom TeamSync meeting: ${meetingId}`;
+    
     const response = await axios.post(
       `${siteUrl}/rest/api/2/issue`,
       {
@@ -618,8 +959,8 @@ const syncToJira = async (actionItem, integration, meetingId) => {
           project: {
             key: projectKey
           },
-          summary: title,
-          description: `${description}\n\nFrom TeamSync meeting: ${meetingId}`,
+          summary: cleanTitle,
+          description: jiraDescription,
           issuetype: {
             name: issueType || 'Task'
           }
@@ -652,14 +993,37 @@ const syncToTrello = async (actionItem, integration, meetingId) => {
     const apiKey = decrypt(integration.trello_api_key);
     const apiToken = decrypt(integration.trello_api_token);
     
+    // Fix the title and description extraction
+    let cleanTitle = title;
+    let cleanDescription = description;
+    
+    // If the title contains "Task Title:", it means we need to extract the actual title from it
+    if (title.includes("Task Title:")) {
+      // The title is in the format "Task Title: [actual title]"
+      cleanTitle = title.replace(/^\s*Task Title:\s*/i, '').trim();
+    }
+    
+    // If the description contains "Description:", extract the actual description
+    if (description.includes("Description:")) {
+      // The description is in the format "Description: [actual description]"
+      cleanDescription = description.replace(/^\s*Description:\s*/i, '').trim();
+    }
+    
+    // Remove any markdown formatting characters
+    cleanTitle = cleanTitle.replace(/\*\*/g, '').trim();
+    cleanDescription = cleanDescription.replace(/\*\*/g, '').trim();
+    
+    // Add more context to the Trello description
+    const trelloDescription = `${cleanDescription}\n\nFrom TeamSync meeting: ${meetingId}`;
+    
     const response = await axios.post(
       `https://api.trello.com/1/cards`,
       null,
       {
         params: {
           idList: listId,
-          name: title,
-          desc: `${description}\n\nFrom TeamSync meeting: ${meetingId}`,
+          name: cleanTitle,
+          desc: trelloDescription,
           key: apiKey,
           token: apiToken
         }
@@ -684,12 +1048,35 @@ const syncToAsana = async (actionItem, integration, meetingId) => {
     
     const personalAccessToken = decrypt(integration.asana_personal_access_token);
     
+    // Fix the title and description extraction
+    let cleanTitle = title;
+    let cleanDescription = description;
+    
+    // If the title contains "Task Title:", it means we need to extract the actual title from it
+    if (title.includes("Task Title:")) {
+      // The title is in the format "Task Title: [actual title]"
+      cleanTitle = title.replace(/^\s*Task Title:\s*/i, '').trim();
+    }
+    
+    // If the description contains "Description:", extract the actual description
+    if (description.includes("Description:")) {
+      // The description is in the format "Description: [actual description]"
+      cleanDescription = description.replace(/^\s*Description:\s*/i, '').trim();
+    }
+    
+    // Remove any markdown formatting characters
+    cleanTitle = cleanTitle.replace(/\*\*/g, '').trim();
+    cleanDescription = cleanDescription.replace(/\*\*/g, '').trim();
+    
+    // Add more context to the Asana description
+    const asanaDescription = `${cleanDescription}\n\nFrom TeamSync meeting: ${meetingId}`;
+    
     const response = await axios.post(
       `https://app.asana.com/api/1.0/tasks`,
       {
         data: {
-          name: title,
-          notes: `${description}\n\nFrom TeamSync meeting: ${meetingId}`,
+          name: cleanTitle,
+          notes: asanaDescription,
           workspace: workspaceId,
           projects: [projectId]
         }

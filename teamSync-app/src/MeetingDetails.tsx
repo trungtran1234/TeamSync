@@ -268,15 +268,25 @@ const MeetingDetails = () => {
           </div>
         </div>
 
-        <div className="bg-slate-800 p-6 rounded-lg h-full overflow-auto min-h-[300px]">
-          <h2 className="text-2xl font-semibold mb-4">Meeting Summary</h2>
-          {loading ? (
-            <p>Loading summary...</p>
-          ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {summary || "No summary available"}
-            </ReactMarkdown>
-          )}
+        <div className="flex flex-col">
+          {/* Add Sync Action Items Component */}
+          <SyncActionItems 
+            meetingId={id || ""}
+            userEmail={userEmail}
+            hasSummary={summary !== ""}
+          />
+
+          {/* Meeting Summary Card */}
+          <div className="bg-slate-800 p-6 rounded-lg h-full overflow-auto min-h-[300px]">
+            <h2 className="text-2xl font-semibold mb-4">Meeting Summary</h2>
+            {loading ? (
+              <p>Loading summary...</p>
+            ) : (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {summary || "No summary available"}
+              </ReactMarkdown>
+            )}
+          </div>
         </div>
       </div>
     </div>
