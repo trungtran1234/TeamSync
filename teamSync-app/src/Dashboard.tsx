@@ -213,6 +213,7 @@ const Dashboard: React.FC = () => {
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-md shadow-lg z-10">
+                <button onClick={() => navigate("/settings")} className="w-full px-4 py-2 text-sm text-white hover:bg-slate-700 text-left">Settings</button>
                 <button
                   onClick={() => {
                     setShowProfileModal(true);

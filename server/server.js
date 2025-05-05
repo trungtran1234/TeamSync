@@ -16,6 +16,13 @@ import {
   refreshAccessToken,
   makeZoomRequest,
 } from "./zoomAPI.js";
+import {
+  getIntegrationStatus,
+  getIntegrationDetails,
+  connectToPlatform,
+  disconnectFromPlatform,
+  syncActionItems
+} from "./platformIntegrations.js";
 
 dotenv.config();
 
@@ -125,6 +132,7 @@ app.get("/meetings", async (req, res) => {
   }
 });
 
+// GET meeting recordings status (used by Lambda functions)
 // GET meeting recordings status (used by Lambda functions)
 app.get("/meeting/:id/recordings", async (req, res) => {
   try {
@@ -318,6 +326,11 @@ app.post("/summarize", async (req, res) => {
     - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
     - **Decisions made** (as bullet points)
     - **Each point made by participants** (as bullet points)
+    
+    - **Key discussion points** (as bullet points)
+    - **Action items** (if any; list these as simple, clear tasks with a short title and a brief description that can be directly converted into action tickets on Jira, Asana, Trello, etc.)
+    - **Decisions made** (as bullet points)
+    - **Each point made by participants** (as bullet points)
 
     Don't include "Meeting Summary:" at the beginning.
 
@@ -413,6 +426,13 @@ app.get("/meeting/:id/summary-text", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve summary" });
   }
 });
+
+// Platform integration endpoints
+app.get("/integrations/status", getIntegrationStatus);
+app.get("/integrations/:platform", getIntegrationDetails);
+app.post("/integrations/:platform", connectToPlatform);
+app.delete("/integrations/:platform", disconnectFromPlatform);
+app.post("/meeting/:id/sync-action-items", syncActionItems);
 
 // POST recording from zoom to S3
 app.post("/meeting/:id/recording", async (req, res) => {

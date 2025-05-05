@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useParams, useNavigate } from "react-router-dom";
+import SyncActionItems from "./components/SyncActionItems";
 
 interface Participant {
   name?: string;
