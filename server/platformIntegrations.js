@@ -698,11 +698,16 @@ export const syncActionItems = async (req, res) => {
         break;
       case 'trello':
         for (const item of actionItems) {
-          const trelloItem = await syncToTrello(item, integration, meetingId);
-          syncedItems.push(trelloItem);
-          
-          // Record the synced item
-          await recordSyncedItem(userId, meetingId, platform, trelloItem.id, item.title, item.description);
+          try {
+            const trelloItem = await syncToTrello(item, integration, meetingId);
+            syncedItems.push(trelloItem);
+            
+            // Record the synced item
+            await recordSyncedItem(userId, meetingId, platform, trelloItem.id, item.title, item.description);
+          } catch (itemError) {
+            console.error(`Error syncing individual Trello item:`, itemError);
+            throw new Error(`Failed to sync to Trello: ${itemError.message}`);
+          }
         }
         break;
       case 'asana':
@@ -723,7 +728,7 @@ export const syncActionItems = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error syncing action items to ${req.body.platform}:`, error);
-    res.status(500).json({ error: `Failed to sync action items to ${req.body.platform}` });
+    res.status(500).json({ error: `Failed to sync action items to ${req.body.platform}: ${error.message}` });
   }
 };
 
@@ -987,11 +992,20 @@ const syncToTrello = async (actionItem, integration, meetingId) => {
     const { title, description } = actionItem;
     const { 
       trello_board_id: boardId, 
-      trello_list_id: listId 
+      trello_list_id: listIdOrName 
     } = integration;
     
     const apiKey = decrypt(integration.trello_api_key);
     const apiToken = decrypt(integration.trello_api_token);
+    
+    // Verify that we have all required parameters
+    if (!apiKey || !apiToken) {
+      throw new Error("Missing Trello API credentials");
+    }
+    
+    if (!listIdOrName) {
+      throw new Error("Missing Trello List ID");
+    }
     
     // Fix the title and description extraction
     let cleanTitle = title;
@@ -1016,12 +1030,52 @@ const syncToTrello = async (actionItem, integration, meetingId) => {
     // Add more context to the Trello description
     const trelloDescription = `${cleanDescription}\n\nFrom TeamSync meeting: ${meetingId}`;
     
+    // Check if listIdOrName is an alphanumeric ID or a list name
+    // If it's a name, we need to get the actual ID first
+    let actualListId = listIdOrName;
+    
+    // If the stored value doesn't look like a Trello ID (which is typically alphanumeric and long),
+    // it's probably a list name, so we need to fetch the actual ID
+    if (!/^[a-f0-9]{24}$/i.test(listIdOrName)) {
+      console.log(`List ID does not appear to be a valid Trello ID. Value: ${listIdOrName}`);
+      console.log("Getting list ID from board...");
+      
+      // Get lists for the board to find the correct list ID
+      const listsUrl = `https://api.trello.com/1/boards/${boardId}/lists?key=${apiKey}&token=${apiToken}`;
+      const listsResponse = await axios.get(listsUrl);
+      
+      if (!listsResponse.data || !Array.isArray(listsResponse.data)) {
+        throw new Error("Failed to retrieve lists from Trello board");
+      }
+      
+      // Find the list by name
+      const matchingList = listsResponse.data.find(
+        list => list.name.toLowerCase() === listIdOrName.toLowerCase()
+      );
+      
+      if (!matchingList) {
+        console.error("Available lists:", listsResponse.data.map(l => l.name).join(", "));
+        throw new Error(`Could not find a list named "${listIdOrName}" on the Trello board`);
+      }
+      
+      actualListId = matchingList.id;
+      console.log(`Found list "${listIdOrName}" with ID: ${actualListId}`);
+    }
+    
+    console.log("Sending to Trello:", {
+      listId: actualListId,
+      name: cleanTitle,
+      desc: trelloDescription.substring(0, 30) + "...", // Truncate for log
+      key: "API_KEY_PRESENT", // Don't log the actual key
+      token: "TOKEN_PRESENT"   // Don't log the actual token
+    });
+    
     const response = await axios.post(
       `https://api.trello.com/1/cards`,
       null,
       {
         params: {
-          idList: listId,
+          idList: actualListId,
           name: cleanTitle,
           desc: trelloDescription,
           key: apiKey,
@@ -1033,7 +1087,11 @@ const syncToTrello = async (actionItem, integration, meetingId) => {
     return response.data;
   } catch (error) {
     console.error("Error syncing to Trello:", error.response?.data || error.message);
-    throw new Error("Failed to create Trello card");
+    if (error.response) {
+      console.error("Response status:", error.response.status);
+      console.error("Response data:", JSON.stringify(error.response.data, null, 2));
+    }
+    throw new Error(`Failed to create Trello card: ${error.message}`);
   }
 };
 
