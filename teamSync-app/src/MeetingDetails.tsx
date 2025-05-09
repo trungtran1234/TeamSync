@@ -3,7 +3,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useParams, useNavigate } from "react-router-dom";
 import SyncActionItems from "./components/SyncActionItems";
-import { FaTasks, FaListUl, FaLightbulb, FaCheckCircle, FaRegDotCircle } from "react-icons/fa";
+import {
+  FaTasks,
+  FaListUl,
+  FaLightbulb,
+  FaCheckCircle,
+  FaRegDotCircle,
+} from "react-icons/fa";
 
 interface Participant {
   name?: string;
@@ -44,6 +50,7 @@ const MeetingDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const [transcriptUrl, setTranscriptUrl] = useState<string | null>(null);
 
   // make endpoint to fetch email and use it later
   const userEmail = "teamsync.group@gmail.com";
@@ -141,6 +148,34 @@ const MeetingDetails = () => {
     fetchMeetingData();
   }, [id, userEmail]);
 
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchTranscript = async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:8080/meeting/${id}/transcript`,
+        );
+        if (!response.ok) throw new Error("Failed to fetch transcript");
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setTranscriptUrl(url);
+      } catch (error) {
+        console.error("Error fetching transcript:", error);
+      }
+    };
+
+    fetchTranscript();
+
+    // Clean up the blob URL when component unmounts
+    return () => {
+      if (transcriptUrl) {
+        URL.revokeObjectURL(transcriptUrl);
+      }
+    };
+  }, [id]);
+
   const downloadTranscript = async () => {
     try {
       const response = await fetch(
@@ -172,10 +207,10 @@ const MeetingDetails = () => {
   const renderFormattedSummary = (summaryText: string) => {
     // Parse the summary to identify different sections
     const sections = parseSummaryIntoSections(summaryText);
-    
+
     // Generate table of contents if there are sections
     const hasSections = Object.keys(sections).length > 0;
-    
+
     return (
       <div className="formatted-summary">
         {hasSections && (
@@ -184,8 +219,8 @@ const MeetingDetails = () => {
             <ul className="list-disc list-inside">
               {Object.keys(sections).map((sectionTitle) => (
                 <li key={sectionTitle} className="mb-1">
-                  <a 
-                    href={`#${sectionTitle.toLowerCase().replace(/\s+/g, '-')}`}
+                  <a
+                    href={`#${sectionTitle.toLowerCase().replace(/\s+/g, "-")}`}
                     className="text-blue-400 hover:text-blue-300 transition-colors"
                   >
                     {sectionTitle}
@@ -195,15 +230,17 @@ const MeetingDetails = () => {
             </ul>
           </div>
         )}
-        
+
         {hasSections ? (
           Object.entries(sections).map(([sectionTitle, content]) => (
-            <div 
+            <div
               key={sectionTitle}
-              id={sectionTitle.toLowerCase().replace(/\s+/g, '-')}
+              id={sectionTitle.toLowerCase().replace(/\s+/g, "-")}
               className={`summary-section mb-6 p-4 rounded-lg border-l-4 ${getSectionStyles(sectionTitle).borderColor}`}
             >
-              <h3 className={`text-xl font-bold mb-3 flex items-center ${getSectionStyles(sectionTitle).textColor}`}>
+              <h3
+                className={`text-xl font-bold mb-3 flex items-center ${getSectionStyles(sectionTitle).textColor}`}
+              >
                 {getSectionIcon(sectionTitle)}
                 <span className="ml-2">{sectionTitle}</span>
               </h3>
@@ -214,9 +251,7 @@ const MeetingDetails = () => {
           ))
         ) : (
           <div className="prose prose-invert text-lg">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-            >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {summaryText}
             </ReactMarkdown>
           </div>
@@ -229,33 +264,47 @@ const MeetingDetails = () => {
     const sections: SectionContent = {};
     let currentSection = "Overview";
     let currentContent: string[] = [];
-    
+
     // Common section titles in meeting summaries
     const sectionTitles = [
-      "Action Items", "Action Points", "Tasks", "To-Dos",
-      "Agenda", "Topics", "Discussion Points",
-      "Key Points", "Main Points", "Highlights", "Notes",
-      "Decisions", "Conclusions", "Outcomes", "Resolutions",
-      "Attendees", "Participants"
+      "Action Items",
+      "Action Points",
+      "Tasks",
+      "To-Dos",
+      "Agenda",
+      "Topics",
+      "Discussion Points",
+      "Key Points",
+      "Main Points",
+      "Highlights",
+      "Notes",
+      "Decisions",
+      "Conclusions",
+      "Outcomes",
+      "Resolutions",
+      "Attendees",
+      "Participants",
     ];
-    
+
     // Split the text into lines and process each line
-    const lines = summaryText.split('\n');
-    
+    const lines = summaryText.split("\n");
+
     lines.forEach((line: string) => {
       // Check if the line is a section header
       const sectionMatch = line.match(/^#+\s+(.+)$/);
       const listHeaderMatch = line.match(/^[*-]\s+\*\*(.+?):\*\*/);
       const boldLineMatch = line.match(/^\*\*(.+?):\*\*/);
-      
+
       if (sectionMatch) {
         // If it's a markdown header, use it as a section title
         const potentialTitle = sectionMatch[1].trim();
-        
+
         // If it's a recognized section or ends with a colon
-        if (sectionTitles.some(title => potentialTitle.includes(title)) || 
-            potentialTitle.endsWith(':')) {
-          currentSection = potentialTitle.replace(/:$/, '');
+        if (
+          sectionTitles.some((title) => potentialTitle.includes(title)) ||
+          potentialTitle.endsWith(":")
+        ) {
+          currentSection = potentialTitle.replace(/:$/, "");
           currentContent = [];
           sections[currentSection] = currentContent;
         } else {
@@ -264,15 +313,19 @@ const MeetingDetails = () => {
         }
       } else if (listHeaderMatch || boldLineMatch) {
         // If it's a list item with a bold prefix like "**Action Items:**"
-        const potentialTitle = (listHeaderMatch ? listHeaderMatch[1] : boldLineMatch?.[1] || "").trim();
-        
-        if (sectionTitles.some(title => potentialTitle.includes(title))) {
+        const potentialTitle = (
+          listHeaderMatch ? listHeaderMatch[1] : boldLineMatch?.[1] || ""
+        ).trim();
+
+        if (sectionTitles.some((title) => potentialTitle.includes(title))) {
           currentSection = potentialTitle;
           currentContent = [];
           sections[currentSection] = currentContent;
-          
+
           // If there's content after the bold part, add it
-          const contentAfterBold = line.replace(/^[*-]\s+\*\*(.+?):\*\*\s*/, '').trim();
+          const contentAfterBold = line
+            .replace(/^[*-]\s+\*\*(.+?):\*\*\s*/, "")
+            .trim();
           if (contentAfterBold) {
             currentContent.push(contentAfterBold);
           }
@@ -285,174 +338,225 @@ const MeetingDetails = () => {
         currentContent.push(line);
       }
     });
-    
+
     // If no sections were identified, put everything in Overview
     if (Object.keys(sections).length === 0 && currentContent.length > 0) {
       sections["Overview"] = currentContent;
     }
-    
+
     return sections;
   };
 
-const renderSectionContent = (content: string[], sectionTitle: string) => {
-  const contentText = content.join('\n');
-  
-  // Special handling for Action Items and other list-based sections
-  if (sectionTitle.includes("Action") || sectionTitle.includes("Tasks") || sectionTitle.includes("To-Do")) {
-    // Parsing logic to extract action items and descriptions
-    const actionItems: {number: string; title: string; description: string}[] = [];
-    let currentItem: {number: string; title: string; description: string} | null = null;
-    
-    content.forEach((line: string) => {
-      if (!line.trim()) return;
-      
-      // Check for "Task Title:" pattern which is shown in the screenshot
-      const taskTitleMatch = line.match(/^Task Title:\s*(.*)/i);
-      const numberWithTaskMatch = line.match(/^(\d+)\s+Task Title:\s*(.*)/i);
-      
-      // Handle regular numbered items or bullets
-      const numberMatch = line.match(/^(\d+)\.?\s+(.*)/);
-      const circleMatch = line.match(/^[◉⦿○●]\s+(.*)/);
-      const bulletMatch = line.match(/^[*-]\s+(.*)/);
-      
-      // Look for description lines without "**Description:**" prefix
-      const descriptionMatch = line.match(/^\s*\*\*Description:\*\*\s*(.*)/i) || 
-                              line.match(/^\s*\*\*.*:\*\*\s*(.*)/i);
-      
-      if (taskTitleMatch || numberWithTaskMatch) {
-        if (currentItem) {
-          actionItems.push(currentItem);
-        }
-        
-        // Create new item from Task Title format
-        currentItem = {
-          number: numberWithTaskMatch ? numberWithTaskMatch[1] : (actionItems.length + 1).toString(),
-          title: (taskTitleMatch ? taskTitleMatch[1] : numberWithTaskMatch ? numberWithTaskMatch[2] : "").trim(),
-          description: ''
-        };
-      }
-      else if (numberMatch) {
-        if (currentItem) {
-          actionItems.push(currentItem);
-        }
-        
-        currentItem = {
-          number: numberMatch[1],
-          title: numberMatch[2].replace(/\*\*/g, '').trim(),
-          description: ''
-        };
-      } 
-      else if (circleMatch || bulletMatch) {
-        if (currentItem) {
-          actionItems.push(currentItem);
-        }
-        
-        currentItem = {
-          number: (actionItems.length + 1).toString(),
-          title: (circleMatch ? circleMatch[1] : bulletMatch ? bulletMatch[1] : '').replace(/\*\*/g, '').trim(),
-          description: ''
-        };
-      }
-      else if (descriptionMatch && currentItem) {
-        currentItem.description = descriptionMatch[1].trim();
-      }
-      else if (line.includes("**Description:**") && currentItem) {
-        const parts = line.split("**Description:**");
-        if (parts.length > 1) {
-          currentItem.description = parts[1].trim();
-        }
-      }
-      else if (currentItem) {
-        if (currentItem.description) {
-          currentItem.description += ' ' + line.trim();
+  const renderSectionContent = (content: string[], sectionTitle: string) => {
+    const contentText = content.join("\n");
+
+    // Special handling for Action Items and other list-based sections
+    if (
+      sectionTitle.includes("Action") ||
+      sectionTitle.includes("Tasks") ||
+      sectionTitle.includes("To-Do")
+    ) {
+      // Parsing logic to extract action items and descriptions
+      const actionItems: {
+        number: string;
+        title: string;
+        description: string;
+      }[] = [];
+      let currentItem: {
+        number: string;
+        title: string;
+        description: string;
+      } | null = null;
+
+      content.forEach((line: string) => {
+        if (!line.trim()) return;
+
+        // Check for "Task Title:" pattern which is shown in the screenshot
+        const taskTitleMatch = line.match(/^Task Title:\s*(.*)/i);
+        const numberWithTaskMatch = line.match(/^(\d+)\s+Task Title:\s*(.*)/i);
+
+        // Handle regular numbered items or bullets
+        const numberMatch = line.match(/^(\d+)\.?\s+(.*)/);
+        const circleMatch = line.match(/^[◉⦿○●]\s+(.*)/);
+        const bulletMatch = line.match(/^[*-]\s+(.*)/);
+
+        // Look for description lines without "**Description:**" prefix
+        const descriptionMatch =
+          line.match(/^\s*\*\*Description:\*\*\s*(.*)/i) ||
+          line.match(/^\s*\*\*.*:\*\*\s*(.*)/i);
+
+        if (taskTitleMatch || numberWithTaskMatch) {
+          if (currentItem) {
+            actionItems.push(currentItem);
+          }
+
+          // Create new item from Task Title format
+          currentItem = {
+            number: numberWithTaskMatch
+              ? numberWithTaskMatch[1]
+              : (actionItems.length + 1).toString(),
+            title: (taskTitleMatch
+              ? taskTitleMatch[1]
+              : numberWithTaskMatch
+                ? numberWithTaskMatch[2]
+                : ""
+            ).trim(),
+            description: "",
+          };
+        } else if (numberMatch) {
+          if (currentItem) {
+            actionItems.push(currentItem);
+          }
+
+          currentItem = {
+            number: numberMatch[1],
+            title: numberMatch[2].replace(/\*\*/g, "").trim(),
+            description: "",
+          };
+        } else if (circleMatch || bulletMatch) {
+          if (currentItem) {
+            actionItems.push(currentItem);
+          }
+
+          currentItem = {
+            number: (actionItems.length + 1).toString(),
+            title: (circleMatch
+              ? circleMatch[1]
+              : bulletMatch
+                ? bulletMatch[1]
+                : ""
+            )
+              .replace(/\*\*/g, "")
+              .trim(),
+            description: "",
+          };
+        } else if (descriptionMatch && currentItem) {
+          currentItem.description = descriptionMatch[1].trim();
+        } else if (line.includes("**Description:**") && currentItem) {
+          const parts = line.split("**Description:**");
+          if (parts.length > 1) {
+            currentItem.description = parts[1].trim();
+          }
+        } else if (currentItem) {
+          if (currentItem.description) {
+            currentItem.description += " " + line.trim();
+          } else {
+            currentItem.description = line.trim();
+          }
         } else {
-          currentItem.description = line.trim();
+          currentItem = {
+            number: (actionItems.length + 1).toString(),
+            title: line.replace(/\*\*/g, "").trim(),
+            description: "",
+          };
         }
+      });
+
+      if (currentItem) {
+        actionItems.push(currentItem);
       }
-      else {
-        currentItem = {
-          number: (actionItems.length + 1).toString(),
-          title: line.replace(/\*\*/g, '').trim(),
-          description: ''
-        };
-      }
-    });
-    
-    if (currentItem) {
-      actionItems.push(currentItem);
-    }
-    
-    // Render with enhanced styling but without "**Description:**" text
-    return (
-      <ul className="list-none space-y-8">
-        {actionItems.map((item, index) => (
-          <li key={index} className="bg-slate-800 rounded-lg p-5 shadow-lg border-l-4 border-amber-500">
-            <div className="flex items-center mb-3">
-              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold mr-3 shadow-md">
-                {item.number}
-              </div>
-              <h4 className="text-amber-400 font-semibold text-xl">
-                {item.title.includes("Task Title:") ? item.title.replace("Task Title:", "").trim() : item.title}
-              </h4>
-            </div>
-            {item.description && (
-              <div className="ml-11 mt-2">
-                <div className="text-white">
-                  <span className="text-lg">{item.description}</span>
+
+      // Render with enhanced styling but without "**Description:**" text
+      return (
+        <ul className="list-none space-y-8">
+          {actionItems.map((item, index) => (
+            <li
+              key={index}
+              className="bg-slate-800 rounded-lg p-5 shadow-lg border-l-4 border-amber-500"
+            >
+              <div className="flex items-center mb-3">
+                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold mr-3 shadow-md">
+                  {item.number}
                 </div>
+                <h4 className="text-amber-400 font-semibold text-xl">
+                  {item.title.includes("Task Title:")
+                    ? item.title.replace("Task Title:", "").trim()
+                    : item.title}
+                </h4>
               </div>
-            )}
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  
-  // Enhanced styling for other sections
-  return (
-    <div className="prose prose-invert prose-li:my-2 text-lg">
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Enhanced list items
-          li: ({children, ...props}) => (
-            <li className="mb-3 flex items-start bg-slate-800 p-3 rounded-md" {...props}>
-              <FaRegDotCircle className="text-teal-400 mr-3 mt-1 flex-shrink-0" />
-              <span className="text-lg">{children}</span>
+              {item.description && (
+                <div className="ml-11 mt-2">
+                  <div className="text-white">
+                    <span className="text-lg">{item.description}</span>
+                  </div>
+                </div>
+              )}
             </li>
-          ),
-          // Enhanced paragraphs
-          p: ({children, ...props}) => (
-            <p className="mb-4 text-lg leading-relaxed" {...props}>{children}</p>
-          ),
-          // Enhanced headings
-          h1: ({children, ...props}) => (
-            <h1 className="text-3xl font-bold mb-4 text-teal-400" {...props}>{children}</h1>
-          ),
-          h2: ({children, ...props}) => (
-            <h2 className="text-2xl font-bold mb-3 text-teal-400" {...props}>{children}</h2>
-          ),
-          h3: ({children, ...props}) => (
-            <h3 className="text-xl font-bold mb-3 text-teal-400" {...props}>{children}</h3>
-          )
-        }}
-      >
-        {contentText}
-      </ReactMarkdown>
-    </div>
-  );
-};
+          ))}
+        </ul>
+      );
+    }
+
+    // Enhanced styling for other sections
+    return (
+      <div className="prose prose-invert prose-li:my-2 text-lg">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            // Enhanced list items
+            li: ({ children, ...props }) => (
+              <li
+                className="mb-3 flex items-start bg-slate-800 p-3 rounded-md"
+                {...props}
+              >
+                <FaRegDotCircle className="text-teal-400 mr-3 mt-1 flex-shrink-0" />
+                <span className="text-lg">{children}</span>
+              </li>
+            ),
+            // Enhanced paragraphs
+            p: ({ children, ...props }) => (
+              <p className="mb-4 text-lg leading-relaxed" {...props}>
+                {children}
+              </p>
+            ),
+            // Enhanced headings
+            h1: ({ children, ...props }) => (
+              <h1 className="text-3xl font-bold mb-4 text-teal-400" {...props}>
+                {children}
+              </h1>
+            ),
+            h2: ({ children, ...props }) => (
+              <h2 className="text-2xl font-bold mb-3 text-teal-400" {...props}>
+                {children}
+              </h2>
+            ),
+            h3: ({ children, ...props }) => (
+              <h3 className="text-xl font-bold mb-3 text-teal-400" {...props}>
+                {children}
+              </h3>
+            ),
+          }}
+        >
+          {contentText}
+        </ReactMarkdown>
+      </div>
+    );
+  };
 
   const getSectionIcon = (sectionTitle: string) => {
     const title = sectionTitle.toLowerCase();
-    
-    if (title.includes("action") || title.includes("task") || title.includes("to-do")) {
+
+    if (
+      title.includes("action") ||
+      title.includes("task") ||
+      title.includes("to-do")
+    ) {
       return <FaTasks className="flex-shrink-0" />;
     } else if (title.includes("agenda") || title.includes("topic")) {
       return <FaListUl className="flex-shrink-0" />;
-    } else if (title.includes("key") || title.includes("highlight") || title.includes("main") || title.includes("note")) {
+    } else if (
+      title.includes("key") ||
+      title.includes("highlight") ||
+      title.includes("main") ||
+      title.includes("note")
+    ) {
       return <FaLightbulb className="flex-shrink-0" />;
-    } else if (title.includes("decision") || title.includes("conclusion") || title.includes("outcome") || title.includes("resolution")) {
+    } else if (
+      title.includes("decision") ||
+      title.includes("conclusion") ||
+      title.includes("outcome") ||
+      title.includes("resolution")
+    ) {
       return <FaCheckCircle className="flex-shrink-0" />;
     } else {
       return <FaRegDotCircle className="flex-shrink-0" />;
@@ -461,36 +565,50 @@ const renderSectionContent = (content: string[], sectionTitle: string) => {
 
   const getSectionStyles = (sectionTitle: string): SectionStyle => {
     const title = sectionTitle.toLowerCase();
-    
-    if (title.includes("action") || title.includes("task") || title.includes("to-do")) {
+
+    if (
+      title.includes("action") ||
+      title.includes("task") ||
+      title.includes("to-do")
+    ) {
       return {
         borderColor: "border-amber-500",
         textColor: "text-amber-500",
-        bgColor: "bg-slate-700"
+        bgColor: "bg-slate-700",
       };
     } else if (title.includes("agenda") || title.includes("topic")) {
       return {
         borderColor: "border-blue-400",
         textColor: "text-blue-400",
-        bgColor: "bg-slate-700"
+        bgColor: "bg-slate-700",
       };
-    } else if (title.includes("key") || title.includes("highlight") || title.includes("main") || title.includes("note")) {
+    } else if (
+      title.includes("key") ||
+      title.includes("highlight") ||
+      title.includes("main") ||
+      title.includes("note")
+    ) {
       return {
         borderColor: "border-teal-400",
         textColor: "text-teal-400",
-        bgColor: "bg-slate-700"
+        bgColor: "bg-slate-700",
       };
-    } else if (title.includes("decision") || title.includes("conclusion") || title.includes("outcome") || title.includes("resolution")) {
+    } else if (
+      title.includes("decision") ||
+      title.includes("conclusion") ||
+      title.includes("outcome") ||
+      title.includes("resolution")
+    ) {
       return {
         borderColor: "border-green-400",
         textColor: "text-green-400",
-        bgColor: "bg-slate-700"
+        bgColor: "bg-slate-700",
       };
     } else {
       return {
         borderColor: "border-purple-400",
         textColor: "text-purple-400",
-        bgColor: "bg-slate-700"
+        bgColor: "bg-slate-700",
       };
     }
   };
@@ -530,6 +648,15 @@ const renderSectionContent = (content: string[], sectionTitle: string) => {
             controls
             className="w-full max-w-5xl mb-4"
           >
+            {transcriptUrl && (
+              <track
+                src={transcriptUrl}
+                kind="subtitles"
+                srcLang="en"
+                label="English"
+                default
+              />
+            )}
             Your browser does not support the video tag.
           </video>
 
@@ -607,7 +734,7 @@ const renderSectionContent = (content: string[], sectionTitle: string) => {
 
         <div className="flex flex-col">
           {/* Add Sync Action Items Component */}
-          <SyncActionItems 
+          <SyncActionItems
             meetingId={id || ""}
             userEmail={userEmail}
             hasSummary={summary !== ""}
@@ -620,11 +747,9 @@ const renderSectionContent = (content: string[], sectionTitle: string) => {
               <p>Loading summary...</p>
             ) : (
               <div className="meeting-summary-container text-lg">
-                {summary ? (
-                  renderFormattedSummary(summary)
-                ) : (
-                  "No summary available"
-                )}
+                {summary
+                  ? renderFormattedSummary(summary)
+                  : "No summary available"}
               </div>
             )}
           </div>
