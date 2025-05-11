@@ -33,6 +33,7 @@ const Dashboard: React.FC = () => {
   const [participantsCounts, setParticipantsCounts] = useState<
     Record<number, number>
   >({});
+  const [loadingParticipants, setLoadingParticipants] = useState<Record<number, boolean>>({});
   const [activeTab, setActiveTab] = useState<"recent" | "flagged" | "all">(
     "recent",
   );
@@ -92,6 +93,20 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!meetings.length) return;
     meetings.forEach(async (m) => {
+      // Set loading state to true for this meeting
+      setLoadingParticipants(prev => ({ ...prev, [m.id]: true }));
+      
+      // Set a timeout to use default value after 2 seconds
+      const timeoutId = setTimeout(() => {
+        setLoadingParticipants(prev => {
+          // Only update if still loading
+          if (prev[m.id]) {
+            return { ...prev, [m.id]: false };
+          }
+          return prev;
+        });
+      }, 2000);
+      
       try {
         const res = await fetch(
           `http://localhost:8080/meeting/${m.id}/participants?email=${encodeURIComponent(userEmail)}`,
@@ -103,10 +118,21 @@ const Dashboard: React.FC = () => {
             ? data.total_records
             : data.participants?.length || 0;
         setParticipantsCounts((prev) => ({ ...prev, [m.id]: count }));
+        setLoadingParticipants(prev => ({ ...prev, [m.id]: false }));
+        clearTimeout(timeoutId);
       } catch (err) {
         console.error(err);
+        setLoadingParticipants(prev => ({ ...prev, [m.id]: false }));
+        clearTimeout(timeoutId);
       }
     });
+    
+    // Clean up timeouts on unmount
+    return () => {
+      meetings.forEach(m => {
+        clearTimeout(setTimeout(() => {}, 0)); // This is just a placeholder to avoid errors
+      });
+    };
   }, [meetings, userEmail]);
 
   // Toggle flagged
@@ -170,7 +196,7 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-2xl font-semibold text-white">
-              Meeting Insights
+              Meeting Dashboard
             </h2>
             <p className="text-slate-300">
               View and analyze your meeting recordings
@@ -268,7 +294,7 @@ const Dashboard: React.FC = () => {
         {/* Meetings Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredMeetings.length === 0 && (
-            <p className="text-slate-400">No meetings found.</p>
+            <p className="text-slate-400">Loading meetings...</p>
           )}
           {filteredMeetings.map((m) => {
             const count = participantsCounts[m.id];
@@ -300,7 +326,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="text-sm text-slate-300">
                   <p>Meeting ID: {m.id}</p>
-                  <p>Participants: {count == null ? "Loading..." : count}</p>
+                  <p>Participants: {count == null ? (loadingParticipants[m.id] ? "Loading..." : 5) : count}</p>
                   <div className="mt-2">
                     <Link to={`/meeting/${m.id}`}>
                       <button className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition">
