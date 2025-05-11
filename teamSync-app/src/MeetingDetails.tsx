@@ -717,7 +717,7 @@ const MeetingDetails = () => {
                               {participant.name || "Anonymous"}
                             </p>
                             <p className="text-xs text-gray-300">
-                              {participant.user_email || "No email provided"}
+                              {participant.user_email || "No email found"}
                             </p>
                           </div>
                         </div>

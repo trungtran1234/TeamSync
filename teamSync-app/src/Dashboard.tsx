@@ -6,8 +6,6 @@ import {
   Calendar,
   Clock,
   ChevronDown,
-  Activity,
-  Archive,
   BarChart,
   Flag,
 } from "lucide-react";
@@ -161,20 +159,7 @@ const Dashboard: React.FC = () => {
               <Calendar className="h-5 w-5" />
               <span>Calendar</span>
             </a>
-            <a
-              href="/meetings"
-              className="flex items-center space-x-3 text-slate-300 hover:text-white"
-            >
-              <Activity className="h-5 w-5" />
-              <span>Meetings</span>
-            </a>
-            <a
-              href="/archive"
-              className="flex items-center space-x-3 text-slate-300 hover:text-white"
-            >
-              <Archive className="h-5 w-5" />
-              <span>Archive</span>
-            </a>
+
           </nav>
         </nav>
       </div>

@@ -1,13 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
   Calendar as CalendarIcon,
   BarChart,
-  Activity,
-  Archive,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -23,7 +20,6 @@ interface ZoomMeeting {
 }
 
 const Calendar = () => {
-  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [userInitial, setUserInitial] = useState<string>("T");
@@ -187,20 +183,7 @@ const Calendar = () => {
             <CalendarIcon className="h-5 w-5" />
             <span>Calendar</span>
           </Link>
-          <Link
-            to="/dashboard"
-            className="flex items-center space-x-3 text-slate-300 hover:text-white"
-          >
-            <Activity className="h-5 w-5" />
-            <span>Meetings</span>
-          </Link>
-          <Link
-            to="/dashboard"
-            className="flex items-center space-x-3 text-slate-300 hover:text-white"
-          >
-            <Archive className="h-5 w-5" />
-            <span>Archive</span>
-          </Link>
+
         </nav>
       </div>
 
