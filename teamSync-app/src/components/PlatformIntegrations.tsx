@@ -274,20 +274,7 @@ const PlatformIntegrations: React.FC<IntegrationProps> = ({ userEmail }) => {
               />
 
             </div>
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                placeholder="your.email@company.com"
-                value={formData.jira.email}
-                onChange={e => handleInputChange("jira", "email", e.target.value)}
-                className="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 focus:ring-violet-500 focus:border-violet-500"
-                disabled={status.jira || loading}
-              />
-            </div>
+            
             {/* API Token */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">

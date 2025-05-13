@@ -735,8 +735,12 @@ export const syncActionItems = async (req, res) => {
 // Sync action items to all connected platforms
 export const syncActionItemsToAllPlatforms = async (req, res) => {
   try {
-    const { email } = req.body;
+    // Make sure we can properly extract the email from the request body
+    const email = req.body && req.body.email;
     const meetingId = req.params.id;
+    
+    console.log("Request body:", req.body);
+    console.log("Email from request:", email);
     
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
@@ -745,17 +749,19 @@ export const syncActionItemsToAllPlatforms = async (req, res) => {
     // Get user ID
     const userId = await getUserIdFromEmail(email);
     
-    // Get meeting summary
-    const summaryResult = await pool.query(
-      "SELECT summary FROM meeting_summaries WHERE meeting_id = $1",
-      [meetingId]
-    );
-    
-    if (summaryResult.rows.length === 0) {
-      return res.status(404).json({ error: "Meeting summary not found" });
+    // Get meeting summary from S3 (same approach as in syncActionItems)
+    let summary;
+    try {
+      const summaryResponse = await axios.get(`http://localhost:8080/meeting/${meetingId}/summary-text`);
+      summary = summaryResponse.data.summary;
+      
+      if (!summary) {
+        return res.status(404).json({ error: "Meeting summary not found" });
+      }
+    } catch (error) {
+      console.error("Error fetching meeting summary:", error);
+      return res.status(404).json({ error: "Meeting summary not found or could not be retrieved" });
     }
-    
-    const summary = summaryResult.rows[0].summary;
     
     // Parse action items from summary
     const actionItems = parseActionItems(summary);
@@ -1147,7 +1153,15 @@ const syncToAsana = async (actionItem, integration, meetingId) => {
       }
     );
     
-    return response.data.data;
+    console.log('Asana API response:', JSON.stringify(response.data, null, 2));
+    
+    // Make sure we're returning an object with an 'id' property
+    // This is required for the recordSyncedItem function
+    if (response.data && response.data.data && response.data.data.gid) {
+      return { id: response.data.data.gid };
+    } else {
+      throw new Error('Asana API response did not contain the expected task ID');
+    }
   } catch (error) {
     console.error("Error syncing to Asana:", error.response?.data || error.message);
     throw new Error("Failed to create Asana task");
