@@ -7,10 +7,8 @@
 - **Automatic Summaries**: AI-powered summaries of key points, action items, and decisions made during the meeting.
 - **Meeting Minutes Generation**: Automatically generated meeting minutes distributed to participants via Email and Slack.
 - **Task Syncing**: Action items synced with integrated project management tools like Jira, Trello, and Asana.
-- **Categorized Repository**: Stores meeting recordings in a repository, automatically categorized by topics with integrated highlights.
+- **Categorized Repository**: Stores meeting recordings in a repository for post-meeting reviews
 - **No Manual Note-taking**: Eliminates the need for manual note-taking or task syncing after meetings.
-
-Stay productive with TeamSync — your AI-powered meeting assistant!
 
 ## Code Structure
 
@@ -153,8 +151,7 @@ TeamSync can synchronize meeting action items with several project management pl
 
 1. Navigate to the Platform Integrations page in the TeamSync application
 2. Click on "Connect" for the platform you want to integrate with
-3. Follow the OAuth flow to authorize TeamSync to access your account
-4. Once connected, you can select which project/board to sync action items to
+3. Once connected, you can select which project/board to sync action items to
 
 ### Using the Sync Feature
 
