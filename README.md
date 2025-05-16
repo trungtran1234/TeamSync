@@ -73,10 +73,10 @@ TeamSync consists of two main components: a backend server and a frontend React 
 
 ### Environment Variables
 
-The necessary environment files (.env) for both the server and client will be provided to you. Simply paste these files into their respective directories:
+The necessary environment files for both the server and client will be provided to you with the names `.env-server` and `.env-client`. You'll need to rename them to `.env` in their respective directories:
 
-1. Place the server .env file in the server directory
-2. Place the client .env file in the teamSync-app directory
+1. Copy `.env-server` to the server directory and rename it to `.env`
+2. Copy `.env-client` to the teamSync-app directory and rename it to `.env`
 
 ### Backend Setup
 
