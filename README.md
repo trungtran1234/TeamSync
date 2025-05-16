@@ -2,6 +2,8 @@
 
 **TeamSync** is a powerful Zoom extension designed to organize and streamline meeting agendas, ensuring everyone stays on the same page. Leveraging AI techniques, TeamSync automatically summarizes key points, action items, and generates meeting minutes, making virtual meetings more productive and organized.
 
+**GitHub Repository**: [https://github.com/trungtran1234/TeamSync](https://github.com/trungtran1234/TeamSync)
+
 ## Features
 
 - **Automatic Summaries**: AI-powered summaries of key points, action items, and decisions made during the meeting.
