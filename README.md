@@ -2,15 +2,15 @@
 
 **TeamSync** is a powerful Zoom extension designed to organize and streamline meeting agendas, ensuring everyone stays on the same page. Leveraging AI techniques, TeamSync automatically summarizes key points, action items, and generates meeting minutes, making virtual meetings more productive and organized.
 
+**GitHub Repository**: [https://github.com/trungtran1234/TeamSync](https://github.com/trungtran1234/TeamSync)
+
 ## Features
 
 - **Automatic Summaries**: AI-powered summaries of key points, action items, and decisions made during the meeting.
 - **Meeting Minutes Generation**: Automatically generated meeting minutes distributed to participants via Email and Slack.
 - **Task Syncing**: Action items synced with integrated project management tools like Jira, Trello, and Asana.
-- **Categorized Repository**: Stores meeting recordings in a repository, automatically categorized by topics with integrated highlights.
+- **Categorized Repository**: Stores meeting recordings in a repository for post-meeting reviews
 - **No Manual Note-taking**: Eliminates the need for manual note-taking or task syncing after meetings.
-
-Stay productive with TeamSync — your AI-powered meeting assistant!
 
 ## Code Structure
 
@@ -152,9 +152,9 @@ TeamSync can synchronize meeting action items with several project management pl
 ### Setting Up Integrations
 
 1. Navigate to the Platform Integrations page in the TeamSync application
-2. Click on "Connect" for the platform you want to integrate with
-3. Follow the OAuth flow to authorize TeamSync to access your account
-4. Once connected, you can select which project/board to sync action items to
+2. Select the platform you want to integrate 
+3. Enter the required information for the corresponding platform
+4. Click on "Connect" for the platform you want to integrate with
 
 ### Using the Sync Feature
 
