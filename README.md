@@ -150,8 +150,8 @@ TeamSync can synchronize meeting action items with several project management pl
 ### Setting Up Integrations
 
 1. Navigate to the Platform Integrations page in the TeamSync application
+2. Enter the required information for the corresponding platform
 2. Click on "Connect" for the platform you want to integrate with
-3. Once connected, you can select which project/board to sync action items to
 
 ### Using the Sync Feature
 
